@@ -1,0 +1,4 @@
+build/
+build_usb_cdc/
+sdkconfig.old
+build_esp_now
