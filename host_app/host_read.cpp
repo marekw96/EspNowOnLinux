@@ -5,6 +5,8 @@
 #include <termios.h> // Contains POSIX terminal control definitions
 #include <unistd.h>  // write(), read(), close()
 #include <cstring>
+#include "messages/message_id.hpp"
+#include "messages/start_device.hpp"
 
 int main(int argc, char** argv) {
     std::string port = "/dev/ttyACM0";
@@ -81,11 +83,24 @@ int main(int argc, char** argv) {
         }
 
         if (num_bytes > 0) {
-            // we read some bytes, let's print them
-            for(int i = 0; i < num_bytes; ++i) {
-                std::cout << read_buf[i];
+            std::cout << "Read " << num_bytes << " bytes: ";
+            message_id id = static_cast<message_id>(read_buf[0]);
+            if(id == message_id::START_DEVICE) {
+                std::cout << "Start device message" << std::endl;
+                if(num_bytes == sizeof(start_device)) {
+                    if( memcmp(read_buf + 1, "espnowonlinux", 13) == 0) {
+                        start_device* message = reinterpret_cast<start_device*>(read_buf);
+                        std::cout << "Device type: " << static_cast<int>(message->type) << std::endl;
+                    }
+                }
             }
-            std::cout << std::flush;
+            else {
+                // we read some bytes, let's print them
+                for(int i = 0; i < num_bytes; ++i) {
+                    std::cout << std::hex << static_cast<unsigned>(read_buf[i]) << ' ';
+                }
+                std::cout << std::dec << std::flush;
+            }
         }
     }
 
