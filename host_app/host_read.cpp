@@ -7,6 +7,7 @@
 #include <cstring>
 #include "messages/message_id.hpp"
 #include "messages/start_device.hpp"
+#include "messages/start_host.hpp"
 
 int main(int argc, char** argv) {
     std::string port = "/dev/ttyACM0";
@@ -91,13 +92,16 @@ int main(int argc, char** argv) {
                     if( memcmp(read_buf + 1, "espnowonlinux", 13) == 0) {
                         start_device* message = reinterpret_cast<start_device*>(read_buf);
                         std::cout << "Device type: " << static_cast<int>(message->type) << std::endl;
+
+                        start_host message_to_send;
+                        write(serial_port, &message_to_send, sizeof(message_to_send));
                     }
                 }
             }
             else {
                 // we read some bytes, let's print them
                 for(int i = 0; i < num_bytes; ++i) {
-                    std::cout << std::hex << static_cast<unsigned>(read_buf[i]) << ' ';
+                    std::cout << std::hex << static_cast<unsigned>(read_buf[i]) << " [" << static_cast<char>(read_buf[i]) << "] ";
                 }
                 std::cout << std::dec << std::flush;
             }

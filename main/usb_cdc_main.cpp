@@ -5,6 +5,7 @@
 #include "driver/usb_serial_jtag.h"
 #include "esp_log.h"
 #include "messages/start_device.hpp"
+#include "messages/start_host.hpp"
 
 static const char *TAG = "USB_CDC";
 
@@ -28,11 +29,21 @@ void usb_main(void)
         .type = device_type::ESP32_C3
     };
 
+    uint8_t buffer[256];
+
     while (1) {
         usb_serial_jtag_write_bytes(&message, sizeof(message), pdMS_TO_TICKS(100));
 
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        int bytes_read = usb_serial_jtag_read_bytes(buffer, sizeof(buffer), pdMS_TO_TICKS(100));
+        if (bytes_read > 0) {
+            message_id id = static_cast<message_id>(buffer[0]);
+            if(id == message_id::START_HOST) {
+                break;
+            }
+        }
     }
+
+    ESP_LOGI(TAG, "Handshake complete");
 
     while (1) {
         // 3. Write data to the host
