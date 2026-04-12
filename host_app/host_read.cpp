@@ -101,9 +101,15 @@ int main(int argc, char** argv) {
             else {
                 // we read some bytes, let's print them
                 for(int i = 0; i < num_bytes; ++i) {
-                    std::cout << std::hex << static_cast<unsigned>(read_buf[i]) << " [" << static_cast<char>(read_buf[i]) << "] ";
+                    std::cout << std::hex << static_cast<unsigned>(read_buf[i]) << ' ';
                 }
                 std::cout << std::dec << std::flush;
+
+                for(int i = 0; i < num_bytes; ++i) {
+                    std::cout << static_cast<char>(read_buf[i]);
+                }
+                std::cout << std::dec << std::flush;
+
             }
         }
     }
