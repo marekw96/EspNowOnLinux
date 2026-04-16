@@ -3,6 +3,5 @@
 enum class message_id : unsigned char {
     START_DEVICE = 0,
     START_HOST,
-    LOG,
-    RECEIVED_PACKET
+    LOG_INFO = 'I',
 };

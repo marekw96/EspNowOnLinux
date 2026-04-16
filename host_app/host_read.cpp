@@ -98,6 +98,11 @@ int main(int argc, char** argv) {
                     }
                 }
             }
+            else if(id == message_id::LOG_INFO) {
+                auto* message = reinterpret_cast<char*>(read_buf);
+                message[num_bytes-1] = '\0';
+                std::cout << "[Info] " << message + 1 << std::endl;
+            }
             else {
                 // we read some bytes, let's print them
                 for(int i = 0; i < num_bytes; ++i) {
