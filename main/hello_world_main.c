@@ -153,9 +153,9 @@ void example_espnow_data_prepare(example_espnow_send_param_t *send_param)
     buf->seq_num = s_example_espnow_seq[buf->type]++;
     buf->crc = 0;
     buf->magic = send_param->magic;
-    /* Fill all remaining bytes after the data with random values */
-    esp_fill_random(buf->payload, send_param->len - sizeof(example_espnow_data_t));
-    buf->crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)buf, send_param->len);
+    /* Fill all remaining bytes after the data with an incrementing string */
+    snprintf((char *)send_param->buffer, send_param->len - sizeof(example_espnow_data_t), "Message %d", buf->seq_num);
+    send_param->len = strlen((char *)send_param->buffer);
 }
 
 static void example_espnow_task(void *pvParameter)
@@ -209,6 +209,7 @@ static void example_espnow_task(void *pvParameter)
 
                 memcpy(send_param->dest_mac, send_cb->mac_addr, ESP_NOW_ETH_ALEN);
                 example_espnow_data_prepare(send_param);
+                ESP_LOGI(TAG, "payload is: %s", send_param->buffer);
 
                 /* Send the next data after the previous data is sent. */
                 if (esp_now_send(send_param->dest_mac, send_param->buffer, send_param->len) != ESP_OK) {

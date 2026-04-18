@@ -16,6 +16,7 @@
 #include "config.h"
 #include "messages/start_device.hpp"
 #include "messages/start_host.hpp"
+#include "messages/received_packet.hpp"
 
 
 static QueueHandle_t receive_queue;
@@ -164,8 +165,11 @@ void usb_main(void)
         if (xQueueReceive(receive_queue, &evt, portMAX_DELAY) == pdTRUE) {
             if (evt.id == EXAMPLE_ESPNOW_RECV_CB) {
                 example_espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
-                ESP_LOGI(TAG, "Received message from MAC: " MACSTR ", len: %d, payload %s",
-                    MAC2STR(recv_cb->mac_addr), recv_cb->data_len, recv_cb->data);
+                received_packet packet;
+                memcpy(packet.mac, recv_cb->mac_addr, sizeof(packet.mac));
+                packet.data.insert(packet.data.end(), recv_cb->data, recv_cb->data + recv_cb->data_len);
+                auto buffer = io<received_packet>::serialize(packet);
+                usb_serial_jtag_write_bytes(buffer.data(), buffer.size(), pdMS_TO_TICKS(100));
 
                 free(recv_cb->data);
             }

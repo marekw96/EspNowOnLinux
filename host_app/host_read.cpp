@@ -8,6 +8,7 @@
 #include "messages/message_id.hpp"
 #include "messages/start_device.hpp"
 #include "messages/start_host.hpp"
+#include "messages/received_packet.hpp"
 
 int main(int argc, char** argv) {
     std::string port = "/dev/ttyACM0";
@@ -69,7 +70,7 @@ int main(int argc, char** argv) {
     std::cout << "Listening... (Press Ctrl+C to stop)" << std::endl;
 
     // Allocate memory for read buffer, set size according to your needs
-    char read_buf[256];
+    unsigned char read_buf[256];
 
     while (true) {
         // Read bytes. The behaviour of read() (e.g. does it block?,
@@ -103,6 +104,14 @@ int main(int argc, char** argv) {
                 message[num_bytes-1] = '\0';
                 std::cout << "[Info] " << message + 1 << std::endl;
             }
+            else if (id == message_id::RECEIVED_PACKET) {
+                auto message = io<received_packet>::deserialize(std::span<const unsigned char>(read_buf, num_bytes));
+                std::cout << "[Received] ";
+                for(auto b: message.data) {
+                    std::cout << b;
+                }
+                std::cout << std::endl;
+            }
             else {
                 // we read some bytes, let's print them
                 for(int i = 0; i < num_bytes; ++i) {
@@ -113,7 +122,7 @@ int main(int argc, char** argv) {
                 for(int i = 0; i < num_bytes; ++i) {
                     std::cout << static_cast<char>(read_buf[i]);
                 }
-                std::cout << std::dec << std::flush;
+                std::cout << std::dec << std::endl << std::flush;
 
             }
         }
