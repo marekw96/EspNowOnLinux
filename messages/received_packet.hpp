@@ -4,7 +4,7 @@
 #include <vector>
 #include <span>
 #include <cstdint>
-#include <arpa/inet.h>
+#include "utility.hpp"
 
 struct received_packet {
 
@@ -12,14 +12,6 @@ struct received_packet {
     unsigned char mac[6];
     std::vector<unsigned char> data;
 };
-
-static inline uint32_t host_to_network(uint32_t value) {
-    return htonl(value);
-}
-
-static inline uint32_t network_to_host(uint32_t value) {
-    return ntohl(value);
-}
 
 template <>
 struct io<received_packet> {
