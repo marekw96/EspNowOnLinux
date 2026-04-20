@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <cstring>
 #include "serial_port.hpp"
+#include "tap_device.hpp"
 #include "messages/message_id.hpp"
 #include "messages/start_device.hpp"
 #include "messages/start_host.hpp"
@@ -18,6 +19,7 @@ int main(int argc, char** argv) {
 
     try {
         serial_port sp(port);
+        tap_device tap("espnow0");
 
         std::cout << "Listening... (Press Ctrl+C to stop)" << std::endl;
 
