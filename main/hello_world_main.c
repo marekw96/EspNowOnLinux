@@ -140,21 +140,13 @@ int example_espnow_data_parse(uint8_t *data, uint16_t data_len, uint8_t *state, 
 
     return -1;
 }
-
+int buf_size = 50;
 /* Prepare ESPNOW data to be sent. */
 void example_espnow_data_prepare(example_espnow_send_param_t *send_param)
 {
-    example_espnow_data_t *buf = (example_espnow_data_t *)send_param->buffer;
-
-    assert(send_param->len >= sizeof(example_espnow_data_t));
-
-    buf->type = IS_BROADCAST_ADDR(send_param->dest_mac) ? EXAMPLE_ESPNOW_DATA_BROADCAST : EXAMPLE_ESPNOW_DATA_UNICAST;
-    buf->state = send_param->state;
-    buf->seq_num = s_example_espnow_seq[buf->type]++;
-    buf->crc = 0;
-    buf->magic = send_param->magic;
+    static int seq = 0;
     /* Fill all remaining bytes after the data with an incrementing string */
-    snprintf((char *)send_param->buffer, send_param->len - sizeof(example_espnow_data_t), "Message %d", buf->seq_num);
+    snprintf((char *)send_param->buffer, buf_size, "Message %d", seq++);
     send_param->len = strlen((char *)send_param->buffer);
 }
 
@@ -351,8 +343,8 @@ static esp_err_t example_espnow_init(void)
     send_param->magic = esp_random();
     send_param->count = CONFIG_ESPNOW_SEND_COUNT;
     send_param->delay = CONFIG_ESPNOW_SEND_DELAY;
-    send_param->len = CONFIG_ESPNOW_SEND_LEN;
-    send_param->buffer = malloc(CONFIG_ESPNOW_SEND_LEN);
+    send_param->len = 50;
+    send_param->buffer = malloc(50);
     if (send_param->buffer == NULL) {
         ESP_LOGE(TAG, "Malloc send buffer fail");
         free(send_param);
