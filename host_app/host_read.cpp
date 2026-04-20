@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
                     for(auto& d : eth.dest_mac)
                         d = 0xff;
                     memcpy(eth.src_mac, message.mac, 6);
-                    eth.ethertype = 0x0800;
+                    eth.ethertype = 0x88B5;
 
                     memcpy(tap_buffer, &eth, sizeof(eth));
                     memcpy(tap_buffer + sizeof(eth), message.data.data(), message.data.size());
