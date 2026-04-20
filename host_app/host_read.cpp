@@ -8,6 +8,13 @@
 #include "messages/start_device.hpp"
 #include "messages/start_host.hpp"
 #include "messages/received_packet.hpp"
+struct eth_header {
+    uint8_t dest_mac[6];
+    uint8_t src_mac[6];
+    uint16_t ethertype;
+};
+
+uint8_t tap_buffer[500] = {0};
 
 int main(int argc, char** argv) {
     std::string port = "/dev/ttyACM0";
@@ -60,11 +67,18 @@ int main(int argc, char** argv) {
                 }
                 else if (id == message_id::RECEIVED_PACKET) {
                     auto message = io<received_packet>::deserialize(std::span<const unsigned char>(read_buf, num_bytes));
-                    std::cout << "[Received] ";
-                    for(auto b: message.data) {
-                        std::cout << b;
-                    }
-                    std::cout << std::endl;
+                    std::cout << "[Received] packet from " << message.mac << " with " << message.data.size() << " bytes" << std::endl;
+
+                    eth_header eth;
+                    for(auto& d : eth.dest_mac)
+                        d = 0xff;
+                    memcpy(eth.src_mac, message.mac, 6);
+                    eth.ethertype = 0x0800;
+
+                    memcpy(tap_buffer, &eth, sizeof(eth));
+                    memcpy(tap_buffer + sizeof(eth), message.data.data(), message.data.size());
+                    tap.write(std::span<const unsigned char>(tap_buffer, sizeof(eth) + message.data.size()));
+
                 }
                 else {
                     // we read some bytes, let's print them
