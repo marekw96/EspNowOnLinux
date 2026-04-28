@@ -73,3 +73,7 @@ int tap_device::write(std::span<const unsigned char> buffer) {
 std::string tap_device::get_name() const {
     return m_name;
 }
+
+int tap_device::get_fd() const {
+    return m_fd;
+}

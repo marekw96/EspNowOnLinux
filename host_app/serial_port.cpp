@@ -8,7 +8,7 @@
 #include <stdexcept>
 
 serial_port::serial_port(std::string_view port_name) {
-    m_fd = ::open(std::string(port_name).c_str(), O_RDWR | O_NOCTTY | O_SYNC);
+    m_fd = ::open(std::string(port_name).c_str(), O_RDWR | O_NOCTTY | O_SYNC | O_NONBLOCK);
 
     if (m_fd < 0) {
         throw std::runtime_error("Error " + std::to_string(errno) + " from open: " + strerror(errno));
@@ -82,4 +82,8 @@ int serial_port::read(std::span<unsigned char> buffer) {
 int serial_port::write(std::span<const unsigned char> buffer) {
     if (m_fd < 0) return -1;
     return ::write(m_fd, buffer.data(), buffer.size());
+}
+
+int serial_port::get_fd() const {
+    return m_fd;
 }

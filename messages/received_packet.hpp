@@ -21,7 +21,7 @@ struct io<received_packet> {
 
         buffer.insert(buffer.end(), packet.mac, packet.mac + sizeof(packet.mac));
 
-        uint32_t length = host_to_network(packet.data.size());
+        uint32_t length = host_to_network(static_cast<uint32_t>(packet.data.size()));
         buffer.insert(buffer.end(), reinterpret_cast<unsigned char*>(&length), reinterpret_cast<unsigned char*>(&length) + sizeof(length));
         buffer.insert(buffer.end(), packet.data.begin(), packet.data.end());
         return buffer;

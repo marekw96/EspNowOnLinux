@@ -22,6 +22,7 @@ public:
     int write(std::span<const unsigned char> buffer);
 
     std::string get_name() const;
+    int get_fd() const;
 
 private:
     int m_fd = -1;

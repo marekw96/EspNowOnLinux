@@ -20,6 +20,8 @@ public:
     int read(std::span<unsigned char> buffer);
     int write(std::span<const unsigned char> buffer);
 
+    int get_fd() const;
+
 private:
     int m_fd = -1;
 };
