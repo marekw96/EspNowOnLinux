@@ -8,6 +8,7 @@ enum class message_id : unsigned char {
     START_HOST,
     LOG_INFO = 'I',
     RECEIVED_PACKET = 'R',
+    PACKET_TO_SEND = 'S',
 };
 
 template <typename T>

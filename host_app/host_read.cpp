@@ -12,6 +12,7 @@
 #include "messages/start_device.hpp"
 #include "messages/start_host.hpp"
 #include "messages/received_packet.hpp"
+#include "messages/packet_to_send.hpp"
 
 struct eth_header {
     uint8_t dest_mac[6];
@@ -121,12 +122,12 @@ int main(int argc, char** argv) {
                 if (eth_bytes > 0) {
                     uint16_t ethertype = network_to_host(*reinterpret_cast<uint16_t*>(eth_buffer + 12));
                     if(ethertype == 0x88B5) {
-                        std::cout << "Read " << eth_bytes << " bytes from tap" << std::endl;
+                        packet_to_send packet;
+                        memcpy(packet.destination_mac, eth_buffer + 6, 6);
+                        packet.data.insert(packet.data.end(), eth_buffer + 14, eth_buffer + eth_bytes);
 
-                        for(int i = 0; i < eth_bytes; ++i) {
-                            std::cout << eth_buffer[i] << " " << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(eth_buffer[i]) << " " << (i % 16 == 15 ? "\n" : "");
-                        }
-                        std::cout << std::dec << std::flush << std::endl;
+                        auto serialized = io<packet_to_send>::serialize(packet);
+                        sp.write(serialized);
                     }
                 }
             }

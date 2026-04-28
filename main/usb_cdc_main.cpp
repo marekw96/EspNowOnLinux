@@ -17,6 +17,7 @@
 #include "messages/start_device.hpp"
 #include "messages/start_host.hpp"
 #include "messages/received_packet.hpp"
+#include "messages/packet_to_send.hpp"
 
 
 static QueueHandle_t receive_queue;
@@ -119,6 +120,21 @@ static esp_err_t example_espnow_init(void)
     return ESP_OK;
 }
 
+void jtag_receive_task(void *pvParameters) {
+    uint8_t buffer[256];
+    while (1) {
+        int bytes_read = usb_serial_jtag_read_bytes(buffer, sizeof(buffer), pdMS_TO_TICKS(100));
+        if (bytes_read > 0) {
+            message_id id = static_cast<message_id>(buffer[0]);
+            if(id == message_id::PACKET_TO_SEND) {
+                ESP_LOGI(TAG, "Received packet to send");
+                packet_to_send packet = io<packet_to_send>::deserialize(std::span<const unsigned char>(buffer, bytes_read));
+                esp_now_send(packet.destination_mac, packet.data.data(), packet.data.size());
+            }
+        }
+    }
+}
+
 void usb_main(void)
 {
     // 1. Configure the USB Serial/JTAG driver
@@ -157,6 +173,8 @@ void usb_main(void)
 
     example_wifi_init();
     example_espnow_init();
+
+    xTaskCreate(jtag_receive_task, "jtag_receive_task", 2048, NULL, 5, NULL);
 
     ESP_LOGI(TAG, "HW init done.");
 
