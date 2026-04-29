@@ -3,23 +3,21 @@
 This document tracks the features supported by the EspNowOnLinux project. Check off items as they are implemented.
 
 ## 1. ESP-NOW Core Features
-- [ ] Initialize ESP-NOW protocol completely
-- [ ] Transmit and receive ESP-NOW data packets
-- [ ] Broadcast message support (e.g., for device discovery and announcements)
+- [X] Initialize ESP-NOW protocol completely
+- [X] Transmit and receive ESP-NOW data packets
+- [X] Broadcast message support (e.g., for device discovery and announcements)
 - [ ] Unicast message support (direct peer-to-peer data transfer)
 - [ ] Hardware-level delivery callbacks (Success/Fail transmission status propagation)
 - [ ] Secure Encryption: Encrypted ESP-NOW communication (LMK/PMK support)
 - [ ] Configurable Wi-Fi channel and interface
 
 ## 2. Multi-Device & Dynamic Discovery
-- [ ] Auto-discovery of surrounding ESP-NOW nodes (zero-config networking)
-- [ ] Dynamic peer registration (cache and automatically add new peers upon detection)
 - [ ] Support communicating with multiple independent ESP-NOW nodes simultaneously
 - [ ] Connection health/presence monitoring (timeout and drop unresponsive peers)
 - [ ] Ping/RSSI measurement (track connection strength to each node)
 
 ## 3. Host System & Usability (Linux side)
-- [ ] Transparent Network Device: Emulate TAP interface (ESP-NOW nodes act as standard IP/Ethernet devices)
+- [X] Transparent Network Device: Emulate TAP interface (ESP-NOW nodes act as standard IP/Ethernet devices)
 - [ ] Plug-and-Play: Auto-detect ESP32 serial/USB connection on start
 - [ ] Auto-recovery: Reconnect seamlessly if ESP32 device resets or is unplugged
 - [ ] Easy-to-use CLI: Command to list currently discovered ESP-NOW peers and their signal strengths
