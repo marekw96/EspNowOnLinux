@@ -20,6 +20,7 @@ struct io<packet_to_send> {
 
     static packet_to_send deserialize(std::span<const unsigned char> buffer) {
         packet_to_send packet;
+        buffer = buffer.subspan(1);
         memcpy(packet.destination_mac, buffer.data(), sizeof(packet.destination_mac));
         buffer = buffer.subspan(sizeof(packet.destination_mac));
         packet.data.insert(packet.data.end(), buffer.begin(), buffer.end());

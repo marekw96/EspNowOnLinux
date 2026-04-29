@@ -22,17 +22,22 @@ struct eth_header {
 
 uint8_t tap_buffer[500] = {0};
 
-int main(int argc, char** argv) {
-    std::string port = "/dev/ttyACM0";
-    if (argc > 1) {
-        port = argv[1];
+int main(int argc, char* argv[]) {
+    std::span<char*> args(argv, argv+argc);
+
+    if(args.size() != 3) {
+        std::cerr << "Usage: " << args[0] << " <port> <interface>" << std::endl;
+        return 1;
     }
 
-    std::cout << "Opening serial port: " << port << std::endl;
+    std::string_view port = args[1];
+    std::string_view if_name = args[2];
+
+    std::cout << "Opening serial port: " << port << " and interface " << if_name << std::endl;
 
     try {
         serial_port sp(port);
-        tap_device tap("espnow0");
+        tap_device tap(if_name);
 
         struct pollfd fds[2];
         fds[0].fd = sp.get_fd();
@@ -123,7 +128,7 @@ int main(int argc, char** argv) {
                     uint16_t ethertype = network_to_host(*reinterpret_cast<uint16_t*>(eth_buffer + 12));
                     if(ethertype == 0x88B5) {
                         packet_to_send packet;
-                        memcpy(packet.destination_mac, eth_buffer + 6, 6);
+                        memcpy(packet.destination_mac, eth_buffer, 6);
                         packet.data.insert(packet.data.end(), eth_buffer + 14, eth_buffer + eth_bytes);
 
                         auto serialized = io<packet_to_send>::serialize(packet);

@@ -127,9 +127,11 @@ void jtag_receive_task(void *pvParameters) {
         if (bytes_read > 0) {
             message_id id = static_cast<message_id>(buffer[0]);
             if(id == message_id::PACKET_TO_SEND) {
-                ESP_LOGI(TAG, "Received packet to send");
                 packet_to_send packet = io<packet_to_send>::deserialize(std::span<const unsigned char>(buffer, bytes_read));
-                esp_now_send(packet.destination_mac, packet.data.data(), packet.data.size());
+                ESP_LOGI(TAG, "Received packet to send to mac: %x%x%x%x%x%x %d bytes", packet.destination_mac[0], packet.destination_mac[1], packet.destination_mac[2], packet.destination_mac[3], packet.destination_mac[4], packet.destination_mac[5], packet.data.size());
+                if(esp_now_send(packet.destination_mac, packet.data.data(), packet.data.size()) != ESP_OK) {
+                    ESP_LOGE(TAG, "Failed to send packet");
+                }
             }
         }
     }
