@@ -1,6 +1,7 @@
 #!/bin/bash
 
 APP=${1:-espnow}
+DEVICE=${2:-/dev/ttyACM0}
 
 if [ "$APP" = "usb_cdc" ]; then
     export BUILD_APP="usb_cdc"
@@ -17,4 +18,4 @@ idf.py -B $BUILD_DIR set-target esp32c3
 idf.py -B $BUILD_DIR build
 
 # Flash the project to your device (replace /dev/ttyUSB0 with your actual port) and open the monitor
-idf.py -B $BUILD_DIR -p /dev/ttyACM0 flash monitor
+idf.py -B $BUILD_DIR -p $DEVICE flash monitor
