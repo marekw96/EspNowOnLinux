@@ -8,6 +8,19 @@ The system consists of two main components communicating over a USB CDC connecti
 - **Host Application (Linux)**: Translates local Linux networking operations (via a TAP network device) into serial commands.
 - **ESP32 Firmware**: Acts as a bridge, translating incoming serial commands from the Linux host into ESP-NOW packets over the air, and vice versa.
 
+### Packet Flow
+```text
++-----------------------+              +--------------------+             +-------------------+
+|      Linux Host       |              |   ESP32 Adapter    |             |   Remote ESP32    |
+|                       |              |                    |             |                   |
+|  +-----------------+  |   USB CDC    |  +--------------+  |   ESP-NOW   |  +-------------+  |
+|  |   TAP Device    |  |   (Serial)   |  |   Firmware   |  |  (Wireless) |  |   Firmware  |  |
+|  |                 |<==================>|              |<=================>|             |  |
+|  | (Network Stack) |  |              |  | (usb_cdc_main)| |             |  |             |  |
+|  +-----------------+  |              |  +--------------+  |             |  +-------------+  |
++-----------------------+              +--------------------+             +-------------------+
+```
+
 ## Project Structure
 - `host_app/`: The Linux host C++ application. It handles the TAP network device interface, serial port communication with the attached ESP device, and read/write operations.
 - `main/`: The ESP-IDF firmware code (e.g., `usb_cdc_main.cpp`, `hello_world_main.c`) targeting ESP32-C3. This firmware configures the Wi-Fi interface, handles ESP-NOW receive/transmit callbacks, and bridges traffic through the USB-CDC interface.
