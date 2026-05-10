@@ -3,6 +3,7 @@
 #include <iostream>
 #include <memory>
 #include <utility>
+#include <nlohmann/json.hpp>
 
 using namespace asio;
 using asio::ip::tcp;
@@ -23,22 +24,39 @@ public:
 
     void start() {
         std::cout << "New control session started" << std::endl;
-
-        asio::async_write(socket_, asio::buffer("Hello\n"),
-            std::bind(&control_session::handle_write, shared_from_this(),
-                asio::placeholders::error, asio::placeholders::bytes_transferred));
+        trigger_reading();
     }
 
     control_session(asio::io_context &io_context)
     : socket_(io_context) {}
 
 private:
-    void handle_write(const std::error_code& ec, size_t bytes_transferred)
-    {
+    void trigger_reading(){
+        socket_.async_read_some(asio::buffer(data_),
+            std::bind(&control_session::handle_read, shared_from_this(),
+                asio::placeholders::error, asio::placeholders::bytes_transferred));
+    }
 
+    void handle_write(const std::error_code& ec, size_t bytes_transferred)
+    {}
+
+    void handle_read(const std::error_code& ec, size_t bytes_transferred)
+    {
+        if (ec == asio::error::eof) {
+            std::cout << "Client disconnected" << std::endl;
+        } else if (ec) {
+            std::cerr << "Error: " << ec.message() << std::endl;
+        } else {
+            nlohmann::json json = nlohmann::json::parse(data_.data(), data_.data() + bytes_transferred);
+            if(json["action"] == "add_uart_device") {
+                std::cout << "Adding uart device: " << json["device_file"] << std::endl;
+            }
+            trigger_reading();
+        }
     }
 
     asio::ip::tcp::socket socket_;
+    std::array<char, 4 * 1024> data_;
 };
 
 class control_server
