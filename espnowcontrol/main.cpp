@@ -6,7 +6,7 @@
 constexpr auto CONTROL_PORT = 19997;
 constexpr auto CONTROL_IP = "localhost";
 
-constexpr std::string_view json_add_uart_device = "{\"action\" : \"add_uart_device\",\"device_file\" : \"/dev/ttyUSB0\"}";
+constexpr std::string_view json_add_uart_device = "{\"action\" : \"add_uart_device\",\"device_file\" : \"/dev/ttyACM0\"}";
 
 int main(int argc, char *argv[]) {
     try {
