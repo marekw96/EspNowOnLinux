@@ -147,6 +147,11 @@ private:
                 }
             }
         }
+        else if (id == message_id::LOG_INFO){
+            auto* message = reinterpret_cast<char*>(serial_port_buffer_.data());
+            message[bytes_transferred-1] = '\0';
+            std::cout << espnow_id_ << ": [Info] " << message + 1 << std::endl;
+        }
 
         start_reading_serial_port();
     }
