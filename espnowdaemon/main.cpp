@@ -14,6 +14,14 @@
 #include <sys/socket.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
+#include <deque>
+
+#include "messages/utility.hpp"
+#include "messages/message_id.hpp"
+#include "messages/start_device.hpp"
+#include "messages/start_host.hpp"
+#include "messages/received_packet.hpp"
+#include "messages/packet_to_send.hpp"
 
 using namespace asio;
 using asio::ip::tcp;
@@ -45,8 +53,10 @@ int open_tun_device(std::string_view interface_name) {
     return m_fd;
 }
 
-class espnow_device {
+class espnow_uart_device : public std::enable_shared_from_this<espnow_uart_device> {
 public:
+    using pointer = std::shared_ptr<espnow_uart_device>;
+
     enum class opening_device_error{
         ok = 0,
         device_file_does_not_exist,
@@ -54,7 +64,7 @@ public:
         unknown_error
     };
 
-    static std::expected<espnow_device, opening_device_error> open(asio::io_context& io_context, std::string_view device_file, uint32_t espnow_idx) {
+    static std::expected<pointer, opening_device_error> open(asio::io_context& io_context, std::string_view device_file, uint32_t espnow_idx) {
         asio::serial_port serial_port(io_context);
         try{
             serial_port.open(std::string(device_file));
@@ -74,14 +84,13 @@ public:
 
         auto tun_fd = open_tun_device(espnow_id);
         asio::posix::stream_descriptor tun_fd_descriptor(io_context, tun_fd);
-        std::cout << "here" << std::endl;
 
-        return espnow_device(std::move(serial_port), espnow_id, std::move(tun_fd_descriptor));
+        return std::make_shared<espnow_uart_device>(std::move(serial_port), espnow_id, std::move(tun_fd_descriptor));
     }
 
-    espnow_device(asio::serial_port serial_port, std::string espnow_id, asio::posix::stream_descriptor tun_fd)
+    espnow_uart_device(asio::serial_port serial_port, std::string espnow_id, asio::posix::stream_descriptor tun_fd)
         : serial_port_(std::move(serial_port)), espnow_id_(std::move(espnow_id)), tun_fd_(std::move(tun_fd)) {
-        std::cout << "here4" << std::endl;
+            start_reading_serial_port();
     }
 
     std::string_view get_espnowid() const {
@@ -92,6 +101,55 @@ private:
     std::string espnow_id_;
     asio::serial_port serial_port_;
     asio::posix::stream_descriptor tun_fd_;
+    std::array<uint8_t, 512> serial_port_buffer_;
+    std::deque<std::array<uint8_t, 512>> serial_port_write_buffers_;
+
+    void start_reading_serial_port() {
+        serial_port_.async_read_some(asio::buffer(serial_port_buffer_),
+            std::bind(&espnow_uart_device::serial_port_read_handle, this,
+                asio::placeholders::error, asio::placeholders::bytes_transferred));
+    }
+
+    void start_writing_serial_port() {
+        if (serial_port_write_buffers_.empty()) return;
+
+        serial_port_.async_write_some(asio::buffer(serial_port_write_buffers_.front()),
+            std::bind(&espnow_uart_device::handle_serial_port_write, this,
+                asio::placeholders::error, asio::placeholders::bytes_transferred));
+    }
+
+    void handle_serial_port_write(const asio::error_code& ec, size_t bytes_transferred) {
+        if(ec) {
+            std::cerr << "Error writing serial port: " << ec.message() << std::endl;
+            return;
+        }
+
+        serial_port_write_buffers_.pop_front();
+        start_writing_serial_port();
+    }
+
+    void serial_port_read_handle(const asio::error_code& ec, size_t bytes_transferred) {
+        if(ec) {
+            std::cerr << "Error reading serial port: " << ec.message() << std::endl;
+            return;
+        }
+
+        message_id id = static_cast<message_id>(serial_port_buffer_[0]);
+        if(id == message_id::START_DEVICE) {
+            if(bytes_transferred = sizeof(start_device)){
+                if(memcmp(serial_port_buffer_.data() + 1, "espnowonlinux", 13) == 0) {
+                    std::cout << espnow_id_ << ": received start device message" << std::endl;
+                    start_host message_to_send;
+                    std::array<uint8_t, 512> buffer;
+                    memcpy(buffer.data(), &message_to_send, sizeof(message_to_send));
+                    serial_port_write_buffers_.push_back(buffer);
+                    start_writing_serial_port();
+                }
+            }
+        }
+
+        start_reading_serial_port();
+    }
 };
 
 enum class adding_device_error_code {
@@ -104,30 +162,18 @@ class device_manager {
 public:
     device_manager(asio::io_context& io_context) : io_context_(io_context) {}
 
-    std::expected<espnow_device*, adding_device_error_code> add_uart_device(std::string_view device_file) {
-        auto device = espnow_device::open(io_context_, device_file, espnow_devices_.size());
+    std::expected<espnow_uart_device*, adding_device_error_code> add_uart_device(std::string_view device_file) {
+        auto device = espnow_uart_device::open(io_context_, device_file, espnow_devices_.size());
         if (!device) {
             return std::unexpected(adding_device_error_code::device_file_does_not_exist);
         }
 
-        std::cout << "here2" << std::endl;
-
-        espnow_devices_.push_back(std::move(device.value()));
-        std::cout << "here3" << std::endl;
-        return &espnow_devices_.back();
-    }
-
-    std::optional<espnow_device*> find_device_by_espnowid(std::string_view espnow_id) {
-        for(auto& device : espnow_devices_) {
-            if(device.get_espnowid() == espnow_id) {
-                return &device;
-            }
-        }
-        return std::nullopt;
+        espnow_devices_.push_back(device.value());
+        return espnow_devices_.back().get();
     }
 
 private:
-    std::vector<espnow_device> espnow_devices_;
+    std::vector<espnow_uart_device::pointer> espnow_devices_;
     asio::io_context& io_context_;
 };
 
@@ -182,8 +228,8 @@ private:
                         response_ = "{\"action_status\" : \"unknown_error\"}";
                     }
                 } else {
-                    // response = "{\"action_status\" : \"ok\", \"espnow_id\" : \"" + std::string(device.value()->get_espnowid()) + "\"}";
-                    // std::cout << "Added " << json["device_file"] << " with espnow id: " << device.value()->get_espnowid() << std::endl;
+                    response_ = "{\"action_status\" : \"ok\", \"espnow_id\" : \"" + std::string(device.value()->get_espnowid()) + "\"}";
+                    std::cout << "Added " << json["device_file"] << " with espnow id: " << device.value()->get_espnowid() << std::endl;
                 }
 
                 std::cout << "Response: " << response_ << std::endl;
@@ -237,18 +283,18 @@ private:
 
 int main(int argc, char *argv[])
 {
-    try {
+    // try {
         asio::io_context io_context(1);
 
         device_manager device_manager(io_context);
         control_server server(io_context, device_manager);
 
         io_context.run();
-    }
-    catch (std::exception &e) {
-        std::cerr << "Exception: " << e.what() << std::endl;
-        return 1;
-    }
+    // }
+    // catch (std::exception &e) {
+    //     std::cerr << "Exception: " << e.what() << std::endl;
+    //     return 1;
+    // }
 
     return 0;
 }
