@@ -91,6 +91,7 @@ public:
     espnow_uart_device(asio::serial_port serial_port, std::string espnow_id, asio::posix::stream_descriptor tun_fd)
         : serial_port_(std::move(serial_port)), espnow_id_(std::move(espnow_id)), tun_fd_(std::move(tun_fd)) {
             start_reading_serial_port();
+            start_reading_tun();
     }
 
     std::string_view get_espnowid() const {
@@ -112,11 +113,42 @@ private:
     asio::posix::stream_descriptor tun_fd_;
     std::array<uint8_t, 512> serial_port_buffer_;
     std::deque<packet_buffer> serial_port_write_buffers_;
+    std::array<uint8_t, 512> tun_fd_buffer_;
+    std::deque<packet_buffer> tun_fd_write_buffers_;
+
+    void start_reading_tun() {
+        tun_fd_.async_read_some(asio::buffer(tun_fd_buffer_),
+            std::bind(&espnow_uart_device::tun_read_handle, this,
+                asio::placeholders::error, asio::placeholders::bytes_transferred));
+    }
 
     void start_reading_serial_port() {
         serial_port_.async_read_some(asio::buffer(serial_port_buffer_),
             std::bind(&espnow_uart_device::serial_port_read_handle, this,
                 asio::placeholders::error, asio::placeholders::bytes_transferred));
+    }
+
+    void tun_read_handle(const asio::error_code& ec, size_t bytes_transferred) {
+        if(ec) {
+            std::cerr << "Error reading tun: " << ec.message() << std::endl;
+            return;
+        }
+
+        uint16_t ethertype = network_to_host(*reinterpret_cast<uint16_t*>(tun_fd_buffer_.data() + 12));
+        if(ethertype == 0x88B5) {
+            packet_to_send packet;
+            memcpy(packet.destination_mac, tun_fd_buffer_.data(), 6);
+            packet.data.insert(packet.data.end(), tun_fd_buffer_.data() + 14, tun_fd_buffer_.data() + bytes_transferred);
+
+            packet_buffer buffer;
+            auto serialized = io<packet_to_send>::serialize(packet);
+            buffer.size = serialized.size();
+            memcpy(buffer.buffer.data(), serialized.data(), serialized.size());
+            serial_port_write_buffers_.push_back(buffer);
+            start_writing_serial_port();
+        }
+
+        start_reading_tun();
     }
 
     void start_writing_serial_port() {
