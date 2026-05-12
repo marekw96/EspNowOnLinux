@@ -6,9 +6,18 @@
 constexpr auto CONTROL_PORT = 19997;
 constexpr auto CONTROL_IP = "localhost";
 
-constexpr std::string_view json_add_uart_device = "{\"action\" : \"add_uart_device\",\"device_file\" : \"/dev/ttyACM0\"}";
+std::string make_add_uart_device_command(std::string_view device_file) {
+    std::string command = "{\"action\" : \"add_uart_device\",\"device_file\" : \"" + std::string(device_file) + "\"}";
+    return command;
+}
 
 int main(int argc, char *argv[]) {
+    if (argc != 3)
+        return -1;
+
+    std::string command = argv[1];
+    std::string device_name = argv[2];
+
     try {
         asio::io_context io_context;
         asio::ip::tcp::resolver resolver(io_context);
@@ -20,7 +29,8 @@ int main(int argc, char *argv[]) {
         std::cout << "Connected to " << CONTROL_IP << ":" << CONTROL_PORT << std::endl;
 
         std::error_code error;
-        auto written_size = asio::write(socket, asio::buffer(json_add_uart_device));
+        auto command = make_add_uart_device_command(device_name);
+        auto written_size = asio::write(socket, asio::buffer(command));
 
         if (error == asio::error::eof) {
             std::cerr << "Connection closed by peer" << std::endl;
