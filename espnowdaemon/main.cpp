@@ -98,11 +98,20 @@ public:
     }
 
 private:
+    struct packet_buffer {
+        std::array<uint8_t, 512> buffer;
+        size_t size;
+
+        asio::const_buffer as_buffer() const {
+            return asio::buffer(buffer, size);
+        }
+    };
+
     std::string espnow_id_;
     asio::serial_port serial_port_;
     asio::posix::stream_descriptor tun_fd_;
     std::array<uint8_t, 512> serial_port_buffer_;
-    std::deque<std::array<uint8_t, 512>> serial_port_write_buffers_;
+    std::deque<packet_buffer> serial_port_write_buffers_;
 
     void start_reading_serial_port() {
         serial_port_.async_read_some(asio::buffer(serial_port_buffer_),
@@ -113,7 +122,7 @@ private:
     void start_writing_serial_port() {
         if (serial_port_write_buffers_.empty()) return;
 
-        serial_port_.async_write_some(asio::buffer(serial_port_write_buffers_.front()),
+        serial_port_.async_write_some(serial_port_write_buffers_.front().as_buffer(),
             std::bind(&espnow_uart_device::handle_serial_port_write, this,
                 asio::placeholders::error, asio::placeholders::bytes_transferred));
     }
@@ -136,12 +145,13 @@ private:
 
         message_id id = static_cast<message_id>(serial_port_buffer_[0]);
         if(id == message_id::START_DEVICE) {
-            if(bytes_transferred = sizeof(start_device)){
+            if(bytes_transferred == sizeof(start_device)){
                 if(memcmp(serial_port_buffer_.data() + 1, "espnowonlinux", 13) == 0) {
                     std::cout << espnow_id_ << ": received start device message" << std::endl;
                     start_host message_to_send;
-                    std::array<uint8_t, 512> buffer;
-                    memcpy(buffer.data(), &message_to_send, sizeof(message_to_send));
+                    packet_buffer buffer;
+                    memcpy(buffer.buffer.data(), &message_to_send, sizeof(message_to_send));
+                    buffer.size = sizeof(message_to_send);
                     serial_port_write_buffers_.push_back(buffer);
                     start_writing_serial_port();
                 }
