@@ -151,6 +151,24 @@ private:
         start_reading_tun();
     }
 
+    void start_writing_tun() {
+        if (tun_fd_write_buffers_.empty()) return;
+
+        tun_fd_.async_write_some(tun_fd_write_buffers_.front().as_buffer(),
+            std::bind(&espnow_uart_device::handle_tun_write, this,
+                asio::placeholders::error, asio::placeholders::bytes_transferred));
+    }
+
+    void handle_tun_write(const asio::error_code& ec, size_t bytes_transferred) {
+        if(ec) {
+            std::cerr << "Error writing tun: " << ec.message() << std::endl;
+            return;
+        }
+
+        tun_fd_write_buffers_.pop_front();
+        start_writing_tun();
+    }
+
     void start_writing_serial_port() {
         if (serial_port_write_buffers_.empty()) return;
 
@@ -193,6 +211,21 @@ private:
             auto* message = reinterpret_cast<char*>(serial_port_buffer_.data());
             message[bytes_transferred-1] = '\0';
             std::cout << espnow_id_ << ": [Info] " << message + 1 << std::endl;
+        }
+        else if(id == message_id::RECEIVED_PACKET){
+            auto message = io<received_packet>::deserialize(std::span<const unsigned char>(serial_port_buffer_.data(), bytes_transferred));
+            std::cout << espnow_id_ << ": received packet" << std::endl;
+
+            packet_buffer buffer;
+            uint8_t dest_mac[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+            uint8_t ethertype[] = {0x88, 0xb5};
+            std::memcpy(buffer.buffer.data(), dest_mac, 6);
+            std::memcpy(buffer.buffer.data() + 6, message.mac, 6);
+            std::memcpy(buffer.buffer.data() + 12, ethertype, 2);
+            std::memcpy(buffer.buffer.data() + 14, message.data.data(), message.data.size());
+            buffer.size = 14 + message.data.size();
+            tun_fd_write_buffers_.push_back(buffer);
+            start_writing_tun();
         }
 
         start_reading_serial_port();
