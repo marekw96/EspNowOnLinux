@@ -22,3 +22,8 @@ target_include_directories(test_received_packet PRIVATE ${CMAKE_CURRENT_SOURCE_D
 
 include(GoogleTest)
 gtest_discover_tests(test_received_packet)
+
+add_executable(test_packet_to_send test_packet_to_send.cpp)
+target_link_libraries(test_packet_to_send GTest::gtest_main GTest::gtest)
+target_include_directories(test_packet_to_send PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+gtest_discover_tests(test_packet_to_send)
