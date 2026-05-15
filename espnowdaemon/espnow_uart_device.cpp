@@ -111,6 +111,7 @@ void espnow_uart_device::tun_read_handle(const asio::error_code& ec, size_t byte
         buffer.size = serialized.size();
         memcpy(buffer.buffer.data(), serialized.data(), serialized.size());
         serial_port_write_buffers_.push_back(buffer);
+        std::cout << espnow_id_ << ": sending espnow packet size: " << packet.data.size() << std::endl;
         start_writing_serial_port();
     }
 
@@ -159,10 +160,16 @@ void espnow_uart_device::serial_port_read_handle(const asio::error_code& ec, siz
         return;
     }
 
-    message_id id = static_cast<message_id>(serial_port_buffer_[0]);
+    handle_serial_packet(std::span<uint8_t>(serial_port_buffer_.data(), bytes_transferred));
+    start_reading_serial_port();
+}
+
+void espnow_uart_device::handle_serial_packet(std::span<uint8_t> data) {
+
+    message_id id = static_cast<message_id>(data[0]);
     if(id == message_id::START_DEVICE) {
-        if(bytes_transferred == sizeof(start_device)){
-            if(memcmp(serial_port_buffer_.data() + 1, "espnowonlinux", 13) == 0) {
+        if(data.size() == sizeof(start_device)){
+            if(memcmp(data.data() + 1, "espnowonlinux", 13) == 0) {
                 std::cout << espnow_id_ << ": received start device message" << std::endl;
                 start_host message_to_send;
                 packet_buffer buffer;
@@ -174,13 +181,19 @@ void espnow_uart_device::serial_port_read_handle(const asio::error_code& ec, siz
         }
     }
     else if (id == message_id::LOG_INFO){
-        auto* message = reinterpret_cast<char*>(serial_port_buffer_.data());
-        message[bytes_transferred-1] = '\0';
-        std::cout << espnow_id_ << ": [Info] " << message + 1 << std::endl;
+        auto new_line_it = std::find(data.begin() + 1, data.end(), '\n');
+        if(new_line_it != data.end()) {
+            handle_serial_packet(std::span<uint8_t>(data.begin(), new_line_it));
+            handle_serial_packet(std::span<uint8_t>(new_line_it + 1, data.end()));
+        }
+        else {
+            *data.rbegin() = '\0';
+            std::cout << espnow_id_ << ": [Info:" << data.size() << "]" << data.data() + 1 << std::endl;
+        }
     }
     else if(id == message_id::RECEIVED_PACKET){
-        auto message = io<received_packet>::deserialize(std::span<const unsigned char>(serial_port_buffer_.data(), bytes_transferred));
-        std::cout << espnow_id_ << ": received packet" << std::endl;
+        auto message = io<received_packet>::deserialize(std::span<const unsigned char>(data.data() + 1, data.size() -1));
+        std::cout << espnow_id_ << ": received packet payload size: " << message.data.size() << std::endl;
 
         packet_buffer buffer;
         uint8_t dest_mac[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
@@ -193,6 +206,4 @@ void espnow_uart_device::serial_port_read_handle(const asio::error_code& ec, siz
         tun_fd_write_buffers_.push_back(buffer);
         start_writing_tun();
     }
-
-    start_reading_serial_port();
 }

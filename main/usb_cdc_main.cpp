@@ -72,6 +72,7 @@ static void example_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const u
     }
     memcpy(recv_cb->data, data, len);
     recv_cb->data_len = len;
+    ESP_LOGI(TAG, "Received espnow packet, len: %d",len);
     if (xQueueSend(receive_queue, &evt, ESPNOW_MAXDELAY) != pdTRUE) {
         ESP_LOGW(TAG, "Send receive queue fail");
         free(recv_cb->data);
@@ -189,6 +190,7 @@ void usb_main(void)
                 memcpy(packet.mac, recv_cb->mac_addr, sizeof(packet.mac));
                 packet.data.insert(packet.data.end(), recv_cb->data, recv_cb->data + recv_cb->data_len);
                 auto buffer = io<received_packet>::serialize(packet);
+                ESP_LOGI(TAG, "Received bytes %d, packet.data.size() %d", recv_cb->data_len, packet.data.size());
                 usb_serial_jtag_write_bytes(buffer.data(), buffer.size(), pdMS_TO_TICKS(100));
 
                 free(recv_cb->data);

@@ -49,4 +49,5 @@ private:
     void start_writing_serial_port();
     void handle_serial_port_write(const asio::error_code& ec, size_t bytes_transferred);
     void serial_port_read_handle(const asio::error_code& ec, size_t bytes_transferred);
+    void handle_serial_packet(std::span<uint8_t> data);
 };
