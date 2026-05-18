@@ -18,6 +18,27 @@
 #include "messages/start_host.hpp"
 #include "messages/received_packet.hpp"
 #include "messages/packet_to_send.hpp"
+#include "utility/receiving_buffer.hpp"
+
+extern "C" {
+#include <stdarg.h>
+
+static void write_log_to_uart(const char* message, size_t size){
+    auto size_network = host_to_network(static_cast<uint32_t>(size));
+    usb_serial_jtag_write_bytes("i", 1, pdMS_TO_TICKS(100));
+    usb_serial_jtag_write_bytes(&size_network, sizeof(size_network), pdMS_TO_TICKS(100));
+    usb_serial_jtag_write_bytes(message, size, pdMS_TO_TICKS(100));
+}
+
+static void log_to_uart(const char* format, ...){
+    va_list args;
+    va_start(args, format);
+    char buffer[256];
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    write_log_to_uart(buffer, sizeof(buffer));
+    va_end(args);
+}
+}
 
 
 static QueueHandle_t receive_queue;
@@ -72,7 +93,7 @@ static void example_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const u
     }
     memcpy(recv_cb->data, data, len);
     recv_cb->data_len = len;
-    ESP_LOGI(TAG, "Received espnow packet, len: %d",len);
+    // ESP_LOGI(TAG, "Received espnow packet, len: %d",len);
     if (xQueueSend(receive_queue, &evt, ESPNOW_MAXDELAY) != pdTRUE) {
         ESP_LOGW(TAG, "Send receive queue fail");
         free(recv_cb->data);
@@ -121,19 +142,54 @@ static esp_err_t example_espnow_init(void)
     return ESP_OK;
 }
 
+int32_t handle_packet_from_jtag(std::span<uint8_t> buffer){
+    message_id id = static_cast<message_id>(buffer[0]);
+    if(id == message_id::PACKET_TO_SEND) {
+        auto payload_size = network_to_host(*reinterpret_cast<const uint32_t*>(buffer.data() + 7));
+        packet_to_send packet = io<packet_to_send>::deserialize(buffer);
+
+        // ESP_LOGI(TAG, "Received packet with size %d, payload", payload_size);
+        if(payload_size + 11 > buffer.size()){
+            // log_to_uart("buffer[%d] is smaller than expected packet size[%d]", buffer.size(), payload_size + 11);
+            return -1;
+        }
+
+        if(esp_now_send(packet.destination_mac, packet.data.data(), packet.data.size()) != ESP_OK) {
+            log_to_uart("Failed to send packet");
+        }
+
+        return 11 + packet.data.size();
+    }
+
+    log_to_uart("Unknown message id: %d", id);
+    return 0;
+}
+
 void jtag_receive_task(void *pvParameters) {
-    uint8_t buffer[256];
+    receiving_buffer<256> buffer;
+
     while (1) {
-        int bytes_read = usb_serial_jtag_read_bytes(buffer, sizeof(buffer), pdMS_TO_TICKS(100));
-        if (bytes_read > 0) {
-            message_id id = static_cast<message_id>(buffer[0]);
-            if(id == message_id::PACKET_TO_SEND) {
-                packet_to_send packet = io<packet_to_send>::deserialize(std::span<const unsigned char>(buffer, bytes_read));
-                ESP_LOGI(TAG, "Received packet to send to mac: %x%x%x%x%x%x %d bytes", packet.destination_mac[0], packet.destination_mac[1], packet.destination_mac[2], packet.destination_mac[3], packet.destination_mac[4], packet.destination_mac[5], packet.data.size());
-                if(esp_now_send(packet.destination_mac, packet.data.data(), packet.data.size()) != ESP_OK) {
-                    ESP_LOGE(TAG, "Failed to send packet");
-                }
+        auto free_space = buffer.get_writable();
+        int bytes_read = usb_serial_jtag_read_bytes(free_space.data(), free_space.size(), pdMS_TO_TICKS(100));
+        buffer.commit(bytes_read);
+
+        auto data_span = buffer.get_data();
+
+        while(!data_span.empty()) {
+            auto processed_bytes = handle_packet_from_jtag(data_span);
+            if(processed_bytes == -1 ){
+                // log_to_uart("Wait for remainig data");
+                buffer.move_data_to_front();
+                break;
             }
+
+            if(processed_bytes == 0) {
+                log_to_uart("Failed to handle packet");
+                break;
+            }
+
+            buffer.consume(processed_bytes);
+            data_span = buffer.get_data();
         }
     }
 }
@@ -190,7 +246,7 @@ void usb_main(void)
                 memcpy(packet.mac, recv_cb->mac_addr, sizeof(packet.mac));
                 packet.data.insert(packet.data.end(), recv_cb->data, recv_cb->data + recv_cb->data_len);
                 auto buffer = io<received_packet>::serialize(packet);
-                ESP_LOGI(TAG, "Received bytes %d, packet.data.size() %d", recv_cb->data_len, packet.data.size());
+                // ESP_LOGI(TAG, "Received bytes %d, packet.data.size() %d", recv_cb->data_len, packet.data.size());
                 usb_serial_jtag_write_bytes(buffer.data(), buffer.size(), pdMS_TO_TICKS(100));
 
                 free(recv_cb->data);

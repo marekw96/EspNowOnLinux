@@ -7,6 +7,7 @@
 #include <string_view>
 #include <array>
 #include <deque>
+#include <utility/receiving_buffer.hpp>
 
 class espnow_uart_device : public std::enable_shared_from_this<espnow_uart_device> {
 public:
@@ -33,10 +34,11 @@ private:
         asio::const_buffer as_buffer() const;
     };
 
+    bool requested_start_ = false;
     std::string espnow_id_;
     asio::serial_port serial_port_;
     asio::posix::stream_descriptor tun_fd_;
-    std::array<uint8_t, 512> serial_port_buffer_;
+    receiving_buffer<1024 * 4> serial_port_buffer_;
     std::deque<packet_buffer> serial_port_write_buffers_;
     std::array<uint8_t, 512> tun_fd_buffer_;
     std::deque<packet_buffer> tun_fd_write_buffers_;
@@ -49,5 +51,5 @@ private:
     void start_writing_serial_port();
     void handle_serial_port_write(const asio::error_code& ec, size_t bytes_transferred);
     void serial_port_read_handle(const asio::error_code& ec, size_t bytes_transferred);
-    void handle_serial_packet(std::span<uint8_t> data);
+    int32_t handle_serial_packet(std::span<uint8_t> data);
 };

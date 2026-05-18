@@ -89,7 +89,8 @@ void espnow_uart_device::start_reading_tun() {
 }
 
 void espnow_uart_device::start_reading_serial_port() {
-    serial_port_.async_read_some(asio::buffer(serial_port_buffer_),
+    auto available = serial_port_buffer_.get_writable();
+    serial_port_.async_read_some(asio::buffer(available.data(), available.size()),
         std::bind(&espnow_uart_device::serial_port_read_handle, this,
             asio::placeholders::error, asio::placeholders::bytes_transferred));
 }
@@ -160,39 +161,88 @@ void espnow_uart_device::serial_port_read_handle(const asio::error_code& ec, siz
         return;
     }
 
-    handle_serial_packet(std::span<uint8_t>(serial_port_buffer_.data(), bytes_transferred));
+    serial_port_buffer_.commit(bytes_transferred);
+
+    auto data = serial_port_buffer_.get_data();
+    while(!data.empty()) {
+        auto processed_bytes = handle_serial_packet(data);
+        if(processed_bytes == -1) {
+            serial_port_buffer_.move_data_to_front();
+            break;
+        }
+
+        if(processed_bytes == 0) {
+            std::cerr << "Error handling serial packet" << std::endl;
+            break;
+        }
+
+        serial_port_buffer_.consume(processed_bytes);
+        data = serial_port_buffer_.get_data();
+    }
+
+    serial_port_buffer_.move_data_to_front();
+
     start_reading_serial_port();
 }
 
-void espnow_uart_device::handle_serial_packet(std::span<uint8_t> data) {
-
+int32_t espnow_uart_device::handle_serial_packet(std::span<uint8_t> data) {
     message_id id = static_cast<message_id>(data[0]);
     if(id == message_id::START_DEVICE) {
-        if(data.size() == sizeof(start_device)){
+        if(data.size() >= sizeof(start_device)){
             if(memcmp(data.data() + 1, "espnowonlinux", 13) == 0) {
                 std::cout << espnow_id_ << ": received start device message" << std::endl;
-                start_host message_to_send;
-                packet_buffer buffer;
-                memcpy(buffer.buffer.data(), &message_to_send, sizeof(message_to_send));
-                buffer.size = sizeof(message_to_send);
-                serial_port_write_buffers_.push_back(buffer);
-                start_writing_serial_port();
+                if(!requested_start_) {
+                    requested_start_ = true;
+                    start_host message_to_send;
+                    packet_buffer buffer;
+                    memcpy(buffer.buffer.data(), &message_to_send, sizeof(message_to_send));
+                    buffer.size = sizeof(message_to_send);
+                    serial_port_write_buffers_.push_back(buffer);
+                    start_writing_serial_port();
+                }
             }
+            return sizeof(start_device);
         }
     }
     else if (id == message_id::LOG_INFO){
-        auto new_line_it = std::find(data.begin() + 1, data.end(), '\n');
-        if(new_line_it != data.end()) {
-            handle_serial_packet(std::span<uint8_t>(data.begin(), new_line_it));
-            handle_serial_packet(std::span<uint8_t>(new_line_it + 1, data.end()));
+        auto new_line_it = std::find(data.begin(), data.end(), '\n');
+        if(new_line_it != data.end())
+        {
+            auto length = std::distance(data.begin(), new_line_it);
+            data[length] = '\0';
+            std::cout << espnow_id_ << ": [Info:" << length << "] " << data.data() + 1 << std::endl;
+            return length + 1;
         }
-        else {
-            *data.rbegin() = '\0';
-            std::cout << espnow_id_ << ": [Info:" << data.size() << "]" << data.data() + 1 << std::endl;
+        return -1;
+    }
+    else if(id == message_id::LOG_INFO_UART){
+        if(data.size() < sizeof(message_id) + sizeof(uint32_t)) {
+            std::cout << espnow_id_ << ": received log info header but not payload" << std::endl;
+            return -1;
         }
+        auto expected_size = host_to_network(*reinterpret_cast<uint32_t*>(data.data() + 1));
+        if(data.size() >= sizeof(message_id) + sizeof(uint32_t) + expected_size)
+        {
+            std::cout << espnow_id_ << ": [InfoUart:" << expected_size << "] " << data.data() + 1 + sizeof(uint32_t) << std::endl;
+            return sizeof(message_id) + sizeof(uint32_t) + expected_size;
+        }
+        return -1;
     }
     else if(id == message_id::RECEIVED_PACKET){
-        auto message = io<received_packet>::deserialize(std::span<const unsigned char>(data.data() + 1, data.size() -1));
+        if(data.size() < sizeof(message_id) + sizeof(uint32_t)) {
+            std::cout << espnow_id_ << ": received packet header but not payload" << std::endl;
+            return -1;
+        }
+        auto sub_buffer = data.subspan(1);
+        auto size_buffer = sub_buffer.subspan(6,4);
+        auto payload_buffer = sub_buffer.subspan(10);
+        auto expected_size = network_to_host(*reinterpret_cast<uint32_t*>(size_buffer.data()));
+        if(expected_size < payload_buffer.size()) {
+            std::cout << espnow_id_ << " : received packet but it is incomplete" << std::endl;
+            return -1;
+        }
+
+        auto message = io<received_packet>::deserialize(sub_buffer);
         std::cout << espnow_id_ << ": received packet payload size: " << message.data.size() << std::endl;
 
         packet_buffer buffer;
@@ -205,5 +255,35 @@ void espnow_uart_device::handle_serial_packet(std::span<uint8_t> data) {
         buffer.size = 14 + message.data.size();
         tun_fd_write_buffers_.push_back(buffer);
         start_writing_tun();
+
+        return sizeof(message_id) + 6 + sizeof(uint32_t) + payload_buffer.size();
     }
+    else {
+        auto print_bytes = [this](std::span<uint8_t> span){
+            std::cout << espnow_id_ << ": ";
+            for(auto x : span) {
+                std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)x << " ";
+            }
+            std::cout << " | ";
+            for(auto x : span) {
+                if(std::isalnum(x)) {
+                    std::cout << (char)x;
+                }
+                else {
+                    std::cout << ".";
+                }
+            }
+            std::cout << std::dec << std::endl;
+        };
+        auto off = 0u;
+        while(off < data.size()) {
+            auto sub = data.subspan(off, 32);
+            print_bytes(sub);
+            off += 32;
+        }
+
+        return data.size();
+    }
+
+    return -1;
 }

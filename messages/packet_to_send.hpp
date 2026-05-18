@@ -14,6 +14,8 @@ struct io<packet_to_send> {
         std::vector<unsigned char> buffer;
         buffer.insert(buffer.end(), static_cast<unsigned char>(packet.id));
         buffer.insert(buffer.end(), packet.destination_mac, packet.destination_mac + sizeof(packet.destination_mac));
+        uint32_t length = host_to_network(static_cast<uint32_t>(packet.data.size()));
+        buffer.insert(buffer.end(), reinterpret_cast<unsigned char*>(&length), reinterpret_cast<unsigned char*>(&length) + sizeof(length));
         buffer.insert(buffer.end(), packet.data.begin(), packet.data.end());
         return buffer;
     }
@@ -23,7 +25,9 @@ struct io<packet_to_send> {
         buffer = buffer.subspan(1);
         memcpy(packet.destination_mac, buffer.data(), sizeof(packet.destination_mac));
         buffer = buffer.subspan(sizeof(packet.destination_mac));
-        packet.data.insert(packet.data.end(), buffer.begin(), buffer.end());
+        uint32_t length = network_to_host(*reinterpret_cast<const uint32_t*>(buffer.data()));
+        buffer = buffer.subspan(sizeof(uint32_t));
+        packet.data.assign(buffer.begin(), buffer.begin() + length);
         return packet;
     }
 };
