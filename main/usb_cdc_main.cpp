@@ -19,6 +19,8 @@
 #include "messages/received_packet.hpp"
 #include "messages/packet_to_send.hpp"
 #include "utility/receiving_buffer.hpp"
+#include "utility/ring_buffer.hpp"
+#include <algorithm>
 
 extern "C" {
 #include <stdarg.h>
@@ -45,6 +47,20 @@ static QueueHandle_t receive_queue;
 static uint8_t s_example_broadcast_mac[ESP_NOW_ETH_ALEN] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 static const char *TAG = "USB_CDC";
 #define ESPNOW_MAXDELAY 512
+
+struct __attribute__((packed)) packet{
+    uint8_t id;
+    uint8_t src_mac[6];
+    uint32_t payload_size;
+    uint8_t payload[250];
+}__attribute__((packed));
+
+struct occupied_packet {
+    bool is_free;
+    packet data;
+};
+
+static occupied_packet packets[15];
 
 static void example_wifi_init(void)
 {
@@ -84,25 +100,26 @@ static void example_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const u
         ESP_LOGD(TAG, "Receive unicast ESPNOW data");
     }
 
-    evt.id = EXAMPLE_ESPNOW_RECV_CB;
-    memcpy(recv_cb->mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
-    recv_cb->data = reinterpret_cast<uint8_t*>(malloc(len));
-    if (recv_cb->data == NULL) {
-        ESP_LOGE(TAG, "Malloc receive data fail");
-        return;
-    }
-    memcpy(recv_cb->data, data, len);
-    recv_cb->data_len = len;
-    // ESP_LOGI(TAG, "Received espnow packet, len: %d",len);
-    if (xQueueSend(receive_queue, &evt, ESPNOW_MAXDELAY) != pdTRUE) {
-        ESP_LOGW(TAG, "Send receive queue fail");
-        free(recv_cb->data);
+    auto it = std::find_if(std::begin(packets), std::end(packets), [](const occupied_packet& p){
+        return p.is_free;
+    });
+    if(it != std::end(packets)){
+        it->is_free = false;
+        memcpy(it->data.src_mac, mac_addr, 6);
+        it->data.payload_size = len;
+        memcpy(it->data.payload, data, len);
+        uint8_t idx = std::distance(std::begin(packets), it);
+        if (xQueueSend(receive_queue, &idx, ESPNOW_MAXDELAY) != pdTRUE) {
+            ESP_LOGW(TAG, "Send receive queue fail");
+        }
+    } else {
+        log_to_uart("No space to store received packet");
     }
 }
 
 static esp_err_t example_espnow_init(void)
 {
-    receive_queue = xQueueCreate(ESPNOW_QUEUE_SIZE, sizeof(example_espnow_event_t));
+    receive_queue = xQueueCreate(ESPNOW_QUEUE_SIZE, sizeof(uint8_t));
     if (receive_queue == NULL) {
         ESP_LOGE(TAG, "Create queue fail");
         return ESP_FAIL;
@@ -196,6 +213,11 @@ void jtag_receive_task(void *pvParameters) {
 
 void usb_main(void)
 {
+    // 0. Clear packets
+    for(auto& packet : packets) {
+        packet.is_free = true;
+    }
+
     // 1. Configure the USB Serial/JTAG driver
     usb_serial_jtag_driver_config_t usb_config = {
         .tx_buffer_size = 256,
@@ -237,20 +259,17 @@ void usb_main(void)
 
     ESP_LOGI(TAG, "HW init done.");
 
-    example_espnow_event_t evt;
+    uint8_t index;
     while (1) {
-        if (xQueueReceive(receive_queue, &evt, portMAX_DELAY) == pdTRUE) {
-            if (evt.id == EXAMPLE_ESPNOW_RECV_CB) {
-                example_espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
-                received_packet packet;
-                memcpy(packet.mac, recv_cb->mac_addr, sizeof(packet.mac));
-                packet.data.insert(packet.data.end(), recv_cb->data, recv_cb->data + recv_cb->data_len);
-                auto buffer = io<received_packet>::serialize(packet);
-                // ESP_LOGI(TAG, "Received bytes %d, packet.data.size() %d", recv_cb->data_len, packet.data.size());
-                usb_serial_jtag_write_bytes(buffer.data(), buffer.size(), pdMS_TO_TICKS(100));
+        if (xQueueReceive(receive_queue, &index, portMAX_DELAY) == pdTRUE) {
+            auto& r_packet = packets[index];
 
-                free(recv_cb->data);
-            }
+            auto total_size = 1 + 6 + 4 + r_packet.data.payload_size;
+            r_packet.data.id = static_cast<uint8_t>(message_id::RECEIVED_PACKET);
+            r_packet.data.payload_size = host_to_network(r_packet.data.payload_size);
+
+            usb_serial_jtag_write_bytes(&r_packet.data, total_size, pdMS_TO_TICKS(100));
+            r_packet.is_free = true;
         }
     }
 }
