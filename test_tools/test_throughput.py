@@ -10,7 +10,7 @@ MAC_0 = b'\x11\x22\x33\x44\x55\x66'
 MAC_BROADCAST = b'\xff\xff\xff\xff\xff\xff'
 ETH_TYPE = b'\x88\xb5'
 PAYLOAD_SIZE = 20
-NUM_PACKETS = 10#256
+NUM_PACKETS = 100#256
 
 def send_packets():
     try:

@@ -126,7 +126,7 @@ static void example_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const u
         if (xQueueSend(receive_queue, &idx, ESPNOW_MAXDELAY) != pdTRUE) {
             ESP_LOGW(TAG, "Send receive queue fail");
         }
-        log_to_uart("Received packet with size %d", len);
+        // log_to_uart("Received packet with size %d", len);
     } else {
         log_to_uart("No space to store received packet");
     }
@@ -177,14 +177,18 @@ static esp_err_t example_espnow_init(void)
 int32_t handle_packet_from_jtag(std::span<uint8_t> buffer){
     message_id id = static_cast<message_id>(buffer[0]);
     if(id == message_id::PACKET_TO_SEND) {
-        auto payload_size = network_to_host(*reinterpret_cast<const uint32_t*>(buffer.data() + 7));
-        packet_to_send packet = io<packet_to_send>::deserialize(buffer);
+        if(buffer.size() < 11){
+            return -1;
+        }
 
+        auto payload_size = network_to_host(*reinterpret_cast<const uint32_t*>(buffer.data() + 7));
         // ESP_LOGI(TAG, "Received packet with size %d, payload", payload_size);
         if(payload_size + 11 > buffer.size()){
             // log_to_uart("buffer[%d] is smaller than expected packet size[%d]", buffer.size(), payload_size + 11);
             return -1;
         }
+
+        packet_to_send packet = io<packet_to_send>::deserialize(buffer);
 
         if(esp_now_send(packet.destination_mac, packet.data.data(), packet.data.size()) != ESP_OK) {
             log_to_uart("Failed to send packet");

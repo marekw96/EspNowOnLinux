@@ -231,27 +231,27 @@ int32_t espnow_uart_device::handle_serial_packet(std::span<uint8_t> data) {
     }
     else if(id == message_id::PING){
         if(data.size() >= sizeof(ping)) {
-            std::cout << espnow_id_ << ": received ping message" << std::endl;
+            // std::cout << espnow_id_ << ": received ping message" << std::endl;
             return sizeof(ping);
         }
         return -1;
     }
     else if(id == message_id::RECEIVED_PACKET){
-        if(data.size() < sizeof(message_id) + sizeof(uint32_t)) {
-            std::cout << espnow_id_ << ": received packet header but not payload" << std::endl;
+        if(data.size() < 11) {
+            // std::cout << espnow_id_ << ": received packet header but not payload" << std::endl;
             return -1;
         }
         auto sub_buffer = data.subspan(1);
         auto size_buffer = sub_buffer.subspan(6,4);
         auto payload_buffer = sub_buffer.subspan(10);
         auto expected_size = network_to_host(*reinterpret_cast<uint32_t*>(size_buffer.data()));
-        if(expected_size < payload_buffer.size()) {
+        if(expected_size > payload_buffer.size()) {
             std::cout << espnow_id_ << " : received packet but it is incomplete" << std::endl;
             return -1;
         }
 
         auto message = io<received_packet>::deserialize(sub_buffer);
-        std::cout << espnow_id_ << ": received packet payload size: " << message.data.size() << std::endl;
+        std::cout << espnow_id_ << ": received packet payload size: " << message.data.size() << ", expected_size: " << expected_size << std::endl;
 
         packet_buffer buffer;
         uint8_t dest_mac[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
@@ -264,7 +264,7 @@ int32_t espnow_uart_device::handle_serial_packet(std::span<uint8_t> data) {
         tun_fd_write_buffers_.push_back(buffer);
         start_writing_tun();
 
-        return sizeof(message_id) + 6 + sizeof(uint32_t) + payload_buffer.size();
+        return 11 + message.data.size();
     }
     else {
         auto print_bytes = [this](std::span<uint8_t> span){
