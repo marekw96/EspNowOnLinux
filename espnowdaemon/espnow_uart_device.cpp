@@ -16,6 +16,7 @@
 #include "messages/start_host.hpp"
 #include "messages/received_packet.hpp"
 #include "messages/packet_to_send.hpp"
+#include "messages/ping.hpp"
 
 namespace {
     int open_tun_device(std::string_view interface_name) {
@@ -225,6 +226,13 @@ int32_t espnow_uart_device::handle_serial_packet(std::span<uint8_t> data) {
         {
             std::cout << espnow_id_ << ": [InfoUart:" << expected_size << "] " << data.data() + 1 + sizeof(uint32_t) << std::endl;
             return sizeof(message_id) + sizeof(uint32_t) + expected_size;
+        }
+        return -1;
+    }
+    else if(id == message_id::PING){
+        if(data.size() >= sizeof(ping)) {
+            std::cout << espnow_id_ << ": received ping message" << std::endl;
+            return sizeof(ping);
         }
         return -1;
     }

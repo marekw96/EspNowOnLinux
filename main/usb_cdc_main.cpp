@@ -18,18 +18,32 @@
 #include "messages/start_host.hpp"
 #include "messages/received_packet.hpp"
 #include "messages/packet_to_send.hpp"
+#include "messages/ping.hpp"
 #include "utility/receiving_buffer.hpp"
 #include "utility/ring_buffer.hpp"
 #include <algorithm>
 
+
+SemaphoreHandle_t jtag_tx_semaphore;
+
 extern "C" {
 #include <stdarg.h>
 
+static void push_to_uart_with_synchro(void* data, size_t size){
+    if(xSemaphoreTake(jtag_tx_semaphore, pdMS_TO_TICKS(1000)) == pdTRUE){
+        usb_serial_jtag_write_bytes(data, size, pdMS_TO_TICKS(100));
+        xSemaphoreGive(jtag_tx_semaphore);
+    }
+}
+
 static void write_log_to_uart(const char* message, size_t size){
     auto size_network = host_to_network(static_cast<uint32_t>(size));
-    usb_serial_jtag_write_bytes("i", 1, pdMS_TO_TICKS(100));
-    usb_serial_jtag_write_bytes(&size_network, sizeof(size_network), pdMS_TO_TICKS(100));
-    usb_serial_jtag_write_bytes(message, size, pdMS_TO_TICKS(100));
+    if(xSemaphoreTake(jtag_tx_semaphore, pdMS_TO_TICKS(1000)) == pdTRUE){
+        usb_serial_jtag_write_bytes("i", 1, pdMS_TO_TICKS(100));
+        usb_serial_jtag_write_bytes(&size_network, sizeof(size_network), pdMS_TO_TICKS(100));
+        usb_serial_jtag_write_bytes(message, size, pdMS_TO_TICKS(100));
+        xSemaphoreGive(jtag_tx_semaphore);
+    }
 }
 
 static void log_to_uart(const char* format, ...){
@@ -112,6 +126,7 @@ static void example_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const u
         if (xQueueSend(receive_queue, &idx, ESPNOW_MAXDELAY) != pdTRUE) {
             ESP_LOGW(TAG, "Send receive queue fail");
         }
+        log_to_uart("Received packet with size %d", len);
     } else {
         log_to_uart("No space to store received packet");
     }
@@ -183,7 +198,7 @@ int32_t handle_packet_from_jtag(std::span<uint8_t> buffer){
 }
 
 void jtag_receive_task(void *pvParameters) {
-    receiving_buffer<256> buffer;
+    receiving_buffer<512> buffer;
 
     while (1) {
         auto free_space = buffer.get_writable();
@@ -211,6 +226,14 @@ void jtag_receive_task(void *pvParameters) {
     }
 }
 
+void ping_task(void *pvParameters){
+    while(1){
+        ping p;
+        push_to_uart_with_synchro(&p, sizeof(p));
+        vTaskDelay(pdMS_TO_TICKS(250));
+    }
+}
+
 void usb_main(void)
 {
     // 0. Clear packets
@@ -225,6 +248,7 @@ void usb_main(void)
     };
 
     // 2. Install the driver
+    jtag_tx_semaphore = xSemaphoreCreateMutex();
     esp_err_t err = usb_serial_jtag_driver_install(&usb_config);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to install USB Serial JTAG driver: %s", esp_err_to_name(err));
@@ -239,7 +263,7 @@ void usb_main(void)
     uint8_t buffer[256];
 
     while (1) {
-        usb_serial_jtag_write_bytes(&message, sizeof(message), pdMS_TO_TICKS(100));
+        push_to_uart_with_synchro(&message, sizeof(message));
 
         int bytes_read = usb_serial_jtag_read_bytes(buffer, sizeof(buffer), pdMS_TO_TICKS(100));
         if (bytes_read > 0) {
@@ -256,6 +280,7 @@ void usb_main(void)
     example_espnow_init();
 
     xTaskCreate(jtag_receive_task, "jtag_receive_task", 2048, NULL, 5, NULL);
+    xTaskCreate(ping_task, "ping_task", 512, NULL, 5, NULL);
 
     ESP_LOGI(TAG, "HW init done.");
 
@@ -268,7 +293,7 @@ void usb_main(void)
             r_packet.data.id = static_cast<uint8_t>(message_id::RECEIVED_PACKET);
             r_packet.data.payload_size = host_to_network(r_packet.data.payload_size);
 
-            usb_serial_jtag_write_bytes(&r_packet.data, total_size, pdMS_TO_TICKS(100));
+            push_to_uart_with_synchro(&r_packet.data, total_size);
             r_packet.is_free = true;
         }
     }

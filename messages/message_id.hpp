@@ -11,6 +11,7 @@ enum class message_id : unsigned char {
     LOG_ERROR = 'R',
     RECEIVED_PACKET = 'R',
     PACKET_TO_SEND = 'S',
+    PING = 'P'
 };
 
 template <typename T>
