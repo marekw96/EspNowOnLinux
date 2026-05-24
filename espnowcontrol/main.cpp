@@ -2,21 +2,37 @@
 #include <string>
 #include <string_view>
 #include <asio.hpp>
+#include "ICmdCommand.hpp"
+#include "AddUartDeviceCommand.hpp"
 
 constexpr auto CONTROL_PORT = 19997;
 constexpr auto CONTROL_IP = "localhost";
 
-std::string make_add_uart_device_command(std::string_view device_file) {
-    std::string command = "{\"action\" : \"add_uart_device\",\"device_file\" : \"" + std::string(device_file) + "\"}";
-    return command;
+auto to_vector(int argc, char* argv[]){
+    return std::vector<std::string_view>(argv, argv + argc);
+}
+
+auto find_command(std::string_view arg, const std::vector<std::unique_ptr<ICmdCommand>> &commands){
+    return std::find_if(commands.begin(), commands.end(), [&](const std::unique_ptr<ICmdCommand>& cmd){
+        return cmd->get_name() == arg;
+    });
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 3)
-        return -1;
+    auto args = to_vector(argc, argv);
+    args_t args_view = std::span(args.begin(), args.end()).subspan(1);
+    std::vector<std::unique_ptr<ICmdCommand>> commands;
+    commands.push_back(std::make_unique<AddUartDeviceCommand>());
 
-    std::string command = argv[1];
-    std::string device_name = argv[2];
+    auto command = find_command(args_view[0], commands);
+    if(command == commands.end()){
+        std::cerr << "Command not found" << std::endl;
+        std::cerr << "Available commands:" << std::endl;
+        for(const auto& command : commands){
+            std::cerr << '\t' << command->get_description() << std::endl;
+        }
+        return -1;
+    }
 
     try {
         asio::io_context io_context;
@@ -28,30 +44,11 @@ int main(int argc, char *argv[]) {
 
         std::cout << "Connected to " << CONTROL_IP << ":" << CONTROL_PORT << std::endl;
 
-        std::error_code error;
-        auto command = make_add_uart_device_command(device_name);
-        auto written_size = asio::write(socket, asio::buffer(command));
-
-        if (error == asio::error::eof) {
-            std::cerr << "Connection closed by peer" << std::endl;
-            return 1;
-        } else if (error) {
-            throw std::system_error(error);
+        auto result = command->get()->handle(args_view.subspan(1), socket);
+        if(!result) {
+            std::cerr << "Failed to handle command" << std::endl;
+            return -1;
         }
-
-        std::cout << "Written " << written_size << " bytes" << std::endl;
-
-        std::array<char, 1024> data;
-        auto received_size = socket.read_some(asio::buffer(data), error);
-
-        if (error == asio::error::eof) {
-            std::cerr << "Connection closed by peer" << std::endl;
-        } else if (error) {
-            throw std::system_error(error);
-        }
-
-        std::cout << "Received " << received_size << " bytes" << std::endl;
-        std::cout << "Data: " << std::string(data.data(), received_size) << std::endl;
     }
     catch (std::exception &e) {
         std::cerr << "Exception: " << e.what() << std::endl;
