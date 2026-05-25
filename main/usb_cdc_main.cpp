@@ -20,7 +20,6 @@
 #include "messages/packet_to_send.hpp"
 #include "messages/ping.hpp"
 #include "utility/receiving_buffer.hpp"
-#include "utility/ring_buffer.hpp"
 #include <algorithm>
 
 
@@ -221,6 +220,7 @@ void jtag_receive_task(void *pvParameters) {
 
             if(processed_bytes == 0) {
                 log_to_uart("Failed to handle packet");
+                buffer.reset();
                 break;
             }
 
