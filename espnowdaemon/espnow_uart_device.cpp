@@ -152,8 +152,10 @@ void espnow_uart_device::handle_serial_port_write(const asio::error_code& ec, si
         return;
     }
 
-    serial_port_write_buffers_.pop_front();
-    start_writing_serial_port();
+    if(!serial_port_write_buffers_.empty()) {
+        serial_port_write_buffers_.pop_front();
+        start_writing_serial_port();
+    }
 }
 
 void espnow_uart_device::serial_port_read_handle(const asio::error_code& ec, size_t bytes_transferred) {
