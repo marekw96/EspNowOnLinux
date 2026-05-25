@@ -2,6 +2,7 @@
 #include <string>
 #include <string_view>
 #include <asio.hpp>
+#include "ConnectionSocket.hpp"
 #include "ICmdCommand.hpp"
 #include "AddUartDeviceCommand.hpp"
 
@@ -36,15 +37,11 @@ int main(int argc, char *argv[]) {
 
     try {
         asio::io_context io_context;
-        asio::ip::tcp::resolver resolver(io_context);
-        auto endpoints = resolver.resolve(CONTROL_IP, std::to_string(CONTROL_PORT));
-
-        asio::ip::tcp::socket socket(io_context);
-        asio::connect(socket, endpoints);
+        ConnectionSocket socket(io_context);
 
         std::cout << "Connected to " << CONTROL_IP << ":" << CONTROL_PORT << std::endl;
 
-        auto result = command->get()->handle(args_view.subspan(1), socket);
+        auto result = command->get()->handle(socket, args_view.subspan(1));
         if(!result) {
             std::cerr << "Failed to handle command" << std::endl;
             return -1;
