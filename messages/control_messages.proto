@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package control_messages;
+
+message add_uart_device_request {
+    string device_file = 1;
+}
+
+message add_uart_device_response {
+    enum Status {
+        SUCCESS = 0;
+        DEVICE_FILE_DOES_NOT_EXIST = 1;
+        DEVICE_ALREADY_EXISTS = 2;
+        UNKNOWN_ERROR = 3;
+    }
+    Status status = 1;
+    string device_id = 2;
+}
+
+message control_envelope {
+    uint32 sequence_number = 1;
+    oneof action {
+        add_uart_device_request add_uart_device_request = 2;
+        add_uart_device_response add_uart_device_response = 3;
+    }
+}

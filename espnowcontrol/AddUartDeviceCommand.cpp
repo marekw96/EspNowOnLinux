@@ -1,13 +1,7 @@
 #include "AddUartDeviceCommand.hpp"
 #include <iostream>
 #include <string>
-
-namespace{
-    std::string make_add_uart_device_command(std::string_view device_file) {
-        std::string command = "{\"action\" : \"add_uart_device\",\"device_file\" : \"" + std::string(device_file) + "\"}";
-        return command;
-    }
-}
+#include "control_messages.pb.h"
 
 std::string_view AddUartDeviceCommand::get_name() const {
     return "add_uart_device";
@@ -23,12 +17,37 @@ bool AddUartDeviceCommand::handle(ConnectionSocket& socket, args_t args) {
         return false;
     }
 
-    auto command = make_add_uart_device_command(args[0]);
-    socket.send_message(std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(command.data()), command.size()));
+    control_messages::control_envelope envelope;
+    envelope.set_sequence_number(0);
+    envelope.mutable_add_uart_device_request()->set_device_file(std::string(args[0]));
+
+    std::string data;
+    envelope.SerializeToString(&data);
+
+    socket.send_message(std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(data.c_str()), data.size()));
 
     auto buffer = socket.receive_message();
-    std::cout << "Received " << buffer.size() << " bytes" << std::endl;
-    std::cout << "Data: " << std::string(reinterpret_cast<const char*>(buffer.data()), buffer.size()) << std::endl;
+    control_messages::control_envelope response_envelope;
+    response_envelope.ParseFromArray(buffer.data(), buffer.size());
+
+    if (response_envelope.has_add_uart_device_response()) {
+        const auto& response = response_envelope.add_uart_device_response();
+        if(response.status() == control_messages::add_uart_device_response::SUCCESS) {
+            std::cout << "Added device with ID: " << response.device_id() << std::endl;
+        } else {
+            switch(response.status()) {
+                case control_messages::add_uart_device_response::DEVICE_FILE_DOES_NOT_EXIST:
+                    std::cerr << "Device file does not exist" << std::endl;
+                    break;
+                case control_messages::add_uart_device_response::DEVICE_ALREADY_EXISTS:
+                    std::cerr << "Device already exists" << std::endl;
+                    break;
+                case control_messages::add_uart_device_response::UNKNOWN_ERROR:
+                    std::cerr << "Unknown error" << std::endl;
+                    break;
+            }
+        }
+    }
 
     return true;
 }
