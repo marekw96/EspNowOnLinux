@@ -4,6 +4,7 @@
 #include <asio.hpp>
 #include "ConnectionSocket.hpp"
 #include "ICmdCommand.hpp"
+#include "GetStatisticsCommand.hpp"
 #include "AddUartDeviceCommand.hpp"
 
 constexpr auto CONTROL_PORT = 19997;
@@ -24,6 +25,7 @@ int main(int argc, char *argv[]) {
     args_t args_view = std::span(args.begin(), args.end()).subspan(1);
     std::vector<std::unique_ptr<ICmdCommand>> commands;
     commands.push_back(std::make_unique<AddUartDeviceCommand>());
+    commands.push_back(std::make_unique<GetStatisticsCommand>());
 
     auto command = find_command(args_view[0], commands);
     if(command == commands.end()){

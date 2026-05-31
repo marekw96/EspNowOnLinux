@@ -66,6 +66,18 @@ void control_session::handle_read(const std::error_code& ec, size_t bytes_transf
                 std::bind(&control_session::handle_write, shared_from_this(),
                     asio::placeholders::error, asio::placeholders::bytes_transferred));
         }
+        else if(envelope.has_get_statistics_request()){
+            control_messages::control_envelope response;
+            response.set_sequence_number(envelope.sequence_number());
+            auto* response_get = response.mutable_get_statistics_response();
+
+            response_get->set_status(control_messages::get_statistics_response::DEVICE_NOT_FOUND);
+            response.SerializeToString(&response_);
+
+            asio::async_write(socket_, asio::buffer(response_),
+                std::bind(&control_session::handle_write, shared_from_this(),
+                    asio::placeholders::error, asio::placeholders::bytes_transferred));
+        }
         trigger_reading();
     }
 }

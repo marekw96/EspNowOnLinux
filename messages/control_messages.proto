@@ -17,10 +17,28 @@ message add_uart_device_response {
     string device_id = 2;
 }
 
+message get_statistics_request {
+    string device_id = 1;
+}
+
+message get_statistics_response {
+    enum Status {
+        SUCCESS = 0;
+        DEVICE_NOT_FOUND = 1;
+        UNKNOWN_ERROR = 2;
+    }
+    Status status = 1;
+    uint64 uptime_seconds = 2;
+    uint64 broadcast_sent = 3;
+    uint64 broadcast_received = 4;
+}
+
 message control_envelope {
     uint32 sequence_number = 1;
     oneof action {
         add_uart_device_request add_uart_device_request = 2;
         add_uart_device_response add_uart_device_response = 3;
+        get_statistics_request get_statistics_request = 4;
+        get_statistics_response get_statistics_response = 5;
     }
 }
