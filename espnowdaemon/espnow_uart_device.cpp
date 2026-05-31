@@ -114,6 +114,7 @@ void espnow_uart_device::tun_read_handle(const asio::error_code& ec, size_t byte
         memcpy(buffer.buffer.data(), serialized.data(), serialized.size());
         serial_port_write_buffers_.push_back(buffer);
         std::cout << espnow_id_ << ": sending espnow packet size: " << packet.data.size() << std::endl;
+        ++statistics_.broadcast_sent;
         start_writing_serial_port();
     }
 
@@ -264,6 +265,7 @@ int32_t espnow_uart_device::handle_serial_packet(std::span<uint8_t> data) {
         std::memcpy(buffer.buffer.data() + 14, message.data.data(), message.data.size());
         buffer.size = 14 + message.data.size();
         tun_fd_write_buffers_.push_back(buffer);
+        ++statistics_.broadcast_received;
         start_writing_tun();
 
         return 11 + message.data.size();
@@ -296,4 +298,12 @@ int32_t espnow_uart_device::handle_serial_packet(std::span<uint8_t> data) {
     }
 
     return -1;
+}
+
+uptime_t espnow_uart_device::get_uptime() const {
+    return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - boot_time_);
+}
+
+statistics espnow_uart_device::get_statistics() const {
+    return statistics_;
 }

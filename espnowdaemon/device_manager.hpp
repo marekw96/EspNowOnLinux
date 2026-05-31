@@ -3,8 +3,10 @@
 #include "espnow_uart_device.hpp"
 #include <asio.hpp>
 #include <expected>
+#include <optional>
 #include <string_view>
 #include <vector>
+#include <functional>
 
 enum class adding_device_error_code {
     ok = 0,
@@ -17,6 +19,7 @@ public:
     device_manager(asio::io_context& io_context);
 
     std::expected<espnow_uart_device*, adding_device_error_code> add_uart_device(std::string_view device_file);
+    std::optional<std::reference_wrapper<espnow_uart_device>> get_device_by_id(std::string_view device_id);
 
 private:
     std::vector<espnow_uart_device::pointer> espnow_devices_;

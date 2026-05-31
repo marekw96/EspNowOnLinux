@@ -71,7 +71,19 @@ void control_session::handle_read(const std::error_code& ec, size_t bytes_transf
             response.set_sequence_number(envelope.sequence_number());
             auto* response_get = response.mutable_get_statistics_response();
 
-            response_get->set_status(control_messages::get_statistics_response::DEVICE_NOT_FOUND);
+            auto device_ref = device_manager_.get_device_by_id(envelope.get_statistics_request().device_id());
+
+            if(device_ref.has_value()) {
+                const auto& device = device_ref.value().get();
+                auto stats = device.get_statistics();
+
+                response_get->set_status(control_messages::get_statistics_response::SUCCESS);
+                response_get->set_uptime_seconds(device.get_uptime().count());
+                response_get->set_broadcast_sent(stats.broadcast_sent);
+                response_get->set_broadcast_received(stats.broadcast_received);
+            } else {
+                response_get->set_status(control_messages::get_statistics_response::DEVICE_NOT_FOUND);
+            }
             response.SerializeToString(&response_);
 
             asio::async_write(socket_, asio::buffer(response_),
