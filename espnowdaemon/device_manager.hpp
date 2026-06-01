@@ -21,6 +21,8 @@ public:
     std::expected<espnow_uart_device*, adding_device_error_code> add_uart_device(std::string_view device_file);
     std::optional<std::reference_wrapper<espnow_uart_device>> get_device_by_id(std::string_view device_id);
 
+    std::span<const espnow_uart_device::pointer> get_devices() const;
+
 private:
     std::vector<espnow_uart_device::pointer> espnow_devices_;
     asio::io_context& io_context_;

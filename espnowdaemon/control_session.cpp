@@ -95,6 +95,12 @@ void control_session::handle_read(const std::error_code& ec, size_t bytes_transf
             response.set_sequence_number(envelope.sequence_number());
             auto* response_get = response.mutable_get_list_of_devices_response();
 
+            for(const auto& device : device_manager_.get_devices()) {
+                auto* device_info = response_get->add_devices();
+                device_info->set_device_id(std::string(device->get_espnowid()));
+                device_info->mutable_uart_info()->set_device_file(std::string(device->get_device_file()));
+            }
+
             response.SerializeToString(&response_);
 
             asio::async_write(socket_, asio::buffer(response_),

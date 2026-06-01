@@ -66,11 +66,11 @@ std::expected<espnow_uart_device::pointer, espnow_uart_device::opening_device_er
     auto tun_fd = open_tun_device(espnow_id);
     asio::posix::stream_descriptor tun_fd_descriptor(io_context, tun_fd);
 
-    return std::make_shared<espnow_uart_device>(std::move(serial_port), espnow_id, std::move(tun_fd_descriptor));
+    return std::make_shared<espnow_uart_device>(std::move(serial_port), espnow_id, std::move(tun_fd_descriptor), device_file);
 }
 
-espnow_uart_device::espnow_uart_device(asio::serial_port serial_port, std::string espnow_id, asio::posix::stream_descriptor tun_fd)
-    : serial_port_(std::move(serial_port)), espnow_id_(std::move(espnow_id)), tun_fd_(std::move(tun_fd)) {
+espnow_uart_device::espnow_uart_device(asio::serial_port serial_port, std::string espnow_id, asio::posix::stream_descriptor tun_fd, std::string_view device_file)
+    : serial_port_(std::move(serial_port)), espnow_id_(std::move(espnow_id)), tun_fd_(std::move(tun_fd)), device_file_(device_file) {
         start_reading_serial_port();
         start_reading_tun();
 }
@@ -307,3 +307,8 @@ uptime_t espnow_uart_device::get_uptime() const {
 statistics espnow_uart_device::get_statistics() const {
     return statistics_;
 }
+
+std::string_view espnow_uart_device::get_device_file() const {
+    return device_file_;
+}
+

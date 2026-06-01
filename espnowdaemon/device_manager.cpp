@@ -20,3 +20,7 @@ std::optional<std::reference_wrapper<espnow_uart_device>> device_manager::get_de
     }
     return std::nullopt;
 }
+
+std::span<const espnow_uart_device::pointer> device_manager::get_devices() const {
+    return std::span<const espnow_uart_device::pointer>(espnow_devices_.cbegin(), espnow_devices_.cend());
+}
