@@ -10,7 +10,8 @@ include(protobuf.cmake)
 add_executable(espnowcontrol main.cpp
                              AddUartDeviceCommand.cpp
                              ConnectionSocket.cpp
-                             GetStatisticsCommand.cpp)
+                             GetStatisticsCommand.cpp
+                             GetDevicesListCommand.cpp)
 
 protobuf_generate(TARGET espnowcontrol
                   LANGUAGE cpp

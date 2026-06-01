@@ -6,6 +6,7 @@
 #include "ICmdCommand.hpp"
 #include "GetStatisticsCommand.hpp"
 #include "AddUartDeviceCommand.hpp"
+#include "GetDevicesListCommand.hpp"
 
 constexpr auto CONTROL_PORT = 19997;
 constexpr auto CONTROL_IP = "localhost";
@@ -24,6 +25,7 @@ int main(int argc, char *argv[]) {
     auto args = to_vector(argc, argv);
     args_t args_view = std::span(args.begin(), args.end()).subspan(1);
     std::vector<std::unique_ptr<ICmdCommand>> commands;
+    commands.push_back(std::make_unique<GetDevicesListCommand>());
     commands.push_back(std::make_unique<AddUartDeviceCommand>());
     commands.push_back(std::make_unique<GetStatisticsCommand>());
 

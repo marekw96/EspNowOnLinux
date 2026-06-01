@@ -10,7 +10,7 @@ MAC_0 = b'\x11\x22\x33\x44\x55\x66'
 MAC_BROADCAST = b'\xff\xff\xff\xff\xff\xff'
 ETH_TYPE = b'\x88\xb5'
 PAYLOAD_SIZE = 20
-NUM_PACKETS = 100#256
+NUM_PACKETS = 50#256
 
 def send_packets():
     try:
@@ -28,7 +28,7 @@ def send_packets():
         frame = MAC_BROADCAST + MAC_0 + ETH_TYPE + payload
         sock.send(frame)
         # Small sleep can be added if packets are dropped due to buffer overflow
-        time.sleep(0.01)
+        # time.sleep(0.01)
 
     sock.close()
     print("All packets sent.")

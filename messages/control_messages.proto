@@ -33,6 +33,24 @@ message get_statistics_response {
     uint64 broadcast_received = 4;
 }
 
+message get_list_of_devices_request {
+}
+
+message uart_info {
+    string device_file = 1;
+}
+
+message basic_device_info {
+    string device_id = 1;
+    oneof connection_type {
+        uart_info uart_info = 2;
+    }
+}
+
+message get_list_of_devices_response {
+    repeated basic_device_info devices = 1;
+}
+
 message control_envelope {
     uint32 sequence_number = 1;
     oneof action {
@@ -40,5 +58,7 @@ message control_envelope {
         add_uart_device_response add_uart_device_response = 3;
         get_statistics_request get_statistics_request = 4;
         get_statistics_response get_statistics_response = 5;
+        get_list_of_devices_request get_list_of_devices_request = 6;
+        get_list_of_devices_response get_list_of_devices_response = 7;
     }
 }
