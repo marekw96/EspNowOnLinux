@@ -30,8 +30,13 @@ bool GetDevicesListCommand::handle(ConnectionSocket& socket, args_t) {
     const auto& response = response_envelope.get_list_of_devices_response();
 
     for(const auto& device : response.devices()) {
+        std::cout << device.device_id() << std::endl;
+        std::cout << "\tdevice name: " << device.device_name() << std::endl;
+        std::cout << "\tespnow version: " << device.version() << std::endl;
+        std::cout << "\tfw version: " << device.fw_version().major() << "." << device.fw_version().minor() << "." << device.fw_version().patch() << std::endl;
         if(device.has_uart_info()) {
-            std::cout << device.device_id() << " (uart: " << device.uart_info().device_file() << ")" << std::endl;
+            std::cout << "\tconnection type: UART" << std::endl;
+            std::cout << "\tdevice file: " << device.uart_info().device_file() << std::endl;
         }
     }
 

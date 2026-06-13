@@ -9,12 +9,20 @@
 #include <deque>
 #include <utility/receiving_buffer.hpp>
 #include <chrono>
+#include "messages/start_device.hpp"
 
 using uptime_t = std::chrono::seconds;
 
 struct statistics {
     uint64_t broadcast_sent = 0;
     uint64_t broadcast_received = 0;
+};
+
+struct device_details {
+    std::string device_name;
+    uint8_t mac_address[6];
+    start_device::espnow_version espnow_version;
+    start_device::firmware_version firmware_version;
 };
 
 class espnow_uart_device : public std::enable_shared_from_this<espnow_uart_device> {
@@ -36,6 +44,7 @@ public:
     std::string_view get_device_file() const;
     statistics get_statistics() const;
     uptime_t get_uptime() const;
+    const device_details& get_device_details() const;
 
 private:
     struct packet_buffer {
@@ -46,6 +55,7 @@ private:
     };
 
     bool requested_start_ = false;
+    device_details device_details_;
     std::string espnow_id_;
     std::string device_file_;
     asio::serial_port serial_port_;

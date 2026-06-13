@@ -40,11 +40,29 @@ message uart_info {
     string device_file = 1;
 }
 
+message usb_info {
+}
+
 message basic_device_info {
-    string device_id = 1;
-    oneof connection_type {
-        uart_info uart_info = 2;
+    enum espnow_version {
+        V1 = 0;
+        V2 = 1;
     }
+    message firmware_version {
+        uint32 major = 1;
+        uint32 minor = 2;
+        uint32 patch = 3;
+    }
+
+    string device_id = 1;
+    string device_name = 2;
+    oneof connection_type {
+        uart_info uart_info = 3;
+        usb_info usb_info = 4;
+    }
+    bytes mac_address = 5;
+    espnow_version version = 6;
+    firmware_version fw_version = 7;
 }
 
 message get_list_of_devices_response {

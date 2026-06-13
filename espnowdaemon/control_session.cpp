@@ -99,6 +99,18 @@ void control_session::handle_read(const std::error_code& ec, size_t bytes_transf
                 auto* device_info = response_get->add_devices();
                 device_info->set_device_id(std::string(device->get_espnowid()));
                 device_info->mutable_uart_info()->set_device_file(std::string(device->get_device_file()));
+                const auto& details = device->get_device_details();
+                device_info->set_device_name(details.device_name);
+                if(details.espnow_version == start_device::espnow_version::V1) {
+                    device_info->set_version(control_messages::basic_device_info::V1);
+                } else {
+                    device_info->set_version(control_messages::basic_device_info::V2);
+                }
+                auto* firmware_version = device_info->mutable_fw_version();
+                firmware_version->set_major(details.firmware_version.major);
+                firmware_version->set_minor(details.firmware_version.minor);
+                firmware_version->set_patch(details.firmware_version.patch);
+                device_info->set_mac_address(details.mac_address, 6);
             }
 
             response.SerializeToString(&response_);

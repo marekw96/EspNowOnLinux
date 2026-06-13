@@ -192,7 +192,7 @@ void espnow_uart_device::serial_port_read_handle(const asio::error_code& ec, siz
 int32_t espnow_uart_device::handle_serial_packet(std::span<uint8_t> data) {
     message_id id = static_cast<message_id>(data[0]);
     if(id == message_id::START_DEVICE) {
-        if(data.size() >= sizeof(start_device)){
+        if(data.size() >= start_device::SIZE){
             if(memcmp(data.data() + 1, "espnowonlinux", 13) == 0) {
                 std::cout << espnow_id_ << ": received start device message" << std::endl;
                 if(!requested_start_) {
@@ -203,9 +203,17 @@ int32_t espnow_uart_device::handle_serial_packet(std::span<uint8_t> data) {
                     buffer.size = sizeof(message_to_send);
                     serial_port_write_buffers_.push_back(buffer);
                     start_writing_serial_port();
+
+                    start_device message_got;
+                    buffer_utils<start_device>::read(data, message_got);
+                    device_details_.device_name = message_got.device_name;
+                    device_details_.espnow_version = message_got.version;
+                    device_details_.firmware_version = message_got.fw_version;
+                    memcpy(device_details_.mac_address, message_got.mac_address, 6);
+                    std::cout << espnow_id_ << ": Device name: " << device_details_.device_name << " MAC: " << (device_details_.mac_address) << std::endl;
                 }
             }
-            return sizeof(start_device);
+            return start_device::SIZE;
         }
     }
     else if (id == message_id::LOG_INFO){
@@ -312,3 +320,6 @@ std::string_view espnow_uart_device::get_device_file() const {
     return device_file_;
 }
 
+const device_details& espnow_uart_device::get_device_details() const {
+    return device_details_;
+}
