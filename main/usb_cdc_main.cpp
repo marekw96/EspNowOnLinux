@@ -261,15 +261,32 @@ void usb_main(void)
 
     start_device message = {
         .id = message_id::START_DEVICE,
-        .type = device_type::ESP32_C3
+        .device_name = {'E','S','P','3','2','-','C','3'},
+        .version = start_device::espnow_version::V2,
+        .fw_version = {0,1,0}
     };
+    uint32_t en_version = 0;
+    esp_now_get_version(&en_version);
+    if(en_version == 1) {
+        message.version = start_device::espnow_version::V1;
+    }
+    else {
+        message.version = start_device::espnow_version::V2;
+    }
+
+    if (esp_wifi_get_mac(ESPNOW_WIFI_IF, message.mac_address) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get MAC address");
+    }
 
     uint8_t buffer[256];
+    std::span<uint8_t> buffer_span(buffer, sizeof(buffer));
+    auto left_span = buffer_utils<start_device>::write(buffer_span, message);
+    auto msg_size = buffer_span.size() - left_span.size();
 
     while (1) {
-        push_to_uart_with_synchro(&message, sizeof(message));
+        push_to_uart_with_synchro(buffer, msg_size);
 
-        int bytes_read = usb_serial_jtag_read_bytes(buffer, sizeof(buffer), pdMS_TO_TICKS(100));
+        int bytes_read = usb_serial_jtag_read_bytes(buffer, sizeof(buffer), pdMS_TO_TICKS(1000));
         if (bytes_read > 0) {
             message_id id = static_cast<message_id>(buffer[0]);
             if(id == message_id::START_HOST) {
