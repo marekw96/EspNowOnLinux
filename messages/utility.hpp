@@ -1,6 +1,7 @@
 #pragma once
 
 #include <arpa/inet.h>
+#include <span>
 
 static inline uint32_t host_to_network(uint32_t value) {
     return htonl(value);

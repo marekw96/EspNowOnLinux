@@ -1,7 +1,6 @@
 #pragma once
 
 #include <span>
-#include <vector>
 #include "utility.hpp"
 
 enum class message_id : unsigned char {

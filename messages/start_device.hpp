@@ -21,6 +21,8 @@ struct start_device {
     espnow_version version = espnow_version::V1;
     firmware_version fw_version = {0, 0, 0};
     uint8_t mac_address[6] = {0};
+
+    static constexpr size_t SIZE = sizeof(id) + sizeof(header) + sizeof(device_name) + sizeof(version) + 3 + sizeof(mac_address);
 };
 
 template<>
@@ -60,7 +62,7 @@ struct buffer_utils<start_device::firmware_version> {
 template<>
 struct buffer_utils<start_device> {
     static inline std::span<const uint8_t> read(std::span<const uint8_t> buffer, start_device& value) {
-        assert(buffer.size() >= sizeof(start_device));
+        assert(buffer.size() >= start_device::SIZE);
 
         buffer = buffer_utils<message_id>::read(buffer, value.id);
         buffer = buffer_utils<char[13]>::read(buffer, value.header);
@@ -73,7 +75,7 @@ struct buffer_utils<start_device> {
     }
 
     static inline std::span<uint8_t> write(std::span<uint8_t> buffer, const start_device& value) {
-        assert(buffer.size() >= sizeof(start_device));
+        assert(buffer.size() >= start_device::SIZE);
 
         buffer = buffer_utils<message_id>::write(buffer, value.id);
         buffer = buffer_utils<char[13]>::write(buffer, value.header);
