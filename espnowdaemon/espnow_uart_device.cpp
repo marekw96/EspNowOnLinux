@@ -46,9 +46,9 @@ namespace {
 }
 
 std::expected<espnow_uart_device::pointer, espnow_uart_device::opening_device_error> espnow_uart_device::open(asio::io_context& io_context, std::string_view device_file, uint32_t espnow_idx) {
-    asio::serial_port serial_port(io_context);
+    std::unique_ptr<serial_port_socket> serial_port;
     try{
-        serial_port.open(std::string(device_file));
+        serial_port = std::make_unique<serial_port_socket>(io_context, device_file);
     } catch(asio::system_error& e) {
         std::cout << "no_such_device" << asio::error::no_such_device << std::endl;
         std::cout << "not_found" << asio::error::not_found << std::endl;
@@ -69,9 +69,11 @@ std::expected<espnow_uart_device::pointer, espnow_uart_device::opening_device_er
     return std::make_shared<espnow_uart_device>(std::move(serial_port), espnow_id, std::move(tun_fd_descriptor), device_file);
 }
 
-espnow_uart_device::espnow_uart_device(asio::serial_port serial_port, std::string espnow_id, asio::posix::stream_descriptor tun_fd, std::string_view device_file)
+espnow_uart_device::espnow_uart_device(std::unique_ptr<serial_port_socket> serial_port, std::string espnow_id, asio::posix::stream_descriptor tun_fd, std::string_view device_file)
     : serial_port_(std::move(serial_port)), espnow_id_(std::move(espnow_id)), tun_fd_(std::move(tun_fd)), device_file_(device_file) {
-        start_reading_serial_port();
+        serial_port_->set_read_handler(std::bind(&espnow_uart_device::serial_port_read_handle, this,
+            asio::placeholders::error, asio::placeholders::bytes_transferred));
+        serial_port_->start_reading();
         start_reading_tun();
 }
 
@@ -89,13 +91,6 @@ void espnow_uart_device::start_reading_tun() {
             asio::placeholders::error, asio::placeholders::bytes_transferred));
 }
 
-void espnow_uart_device::start_reading_serial_port() {
-    auto available = serial_port_buffer_.get_writable();
-    serial_port_.async_read_some(asio::buffer(available.data(), available.size()),
-        std::bind(&espnow_uart_device::serial_port_read_handle, this,
-            asio::placeholders::error, asio::placeholders::bytes_transferred));
-}
-
 void espnow_uart_device::tun_read_handle(const asio::error_code& ec, size_t bytes_transferred) {
     if(ec) {
         std::cerr << "Error reading tun: " << ec.message() << std::endl;
@@ -108,14 +103,10 @@ void espnow_uart_device::tun_read_handle(const asio::error_code& ec, size_t byte
         memcpy(packet.destination_mac, tun_fd_buffer_.data(), 6);
         packet.data.insert(packet.data.end(), tun_fd_buffer_.data() + 14, tun_fd_buffer_.data() + bytes_transferred);
 
-        packet_buffer buffer;
         auto serialized = io<packet_to_send>::serialize(packet);
-        buffer.size = serialized.size();
-        memcpy(buffer.buffer.data(), serialized.data(), serialized.size());
-        serial_port_write_buffers_.push_back(buffer);
+        serial_port_->write(std::span<const uint8_t>(serialized.data(), serialized.size()));
         std::cout << espnow_id_ << ": sending espnow packet size: " << packet.data.size() << std::endl;
         ++statistics_.broadcast_sent;
-        start_writing_serial_port();
     }
 
     start_reading_tun();
@@ -139,54 +130,13 @@ void espnow_uart_device::handle_tun_write(const asio::error_code& ec, size_t byt
     start_writing_tun();
 }
 
-void espnow_uart_device::start_writing_serial_port() {
-    if (serial_port_write_buffers_.empty()) return;
-
-    serial_port_.async_write_some(serial_port_write_buffers_.front().as_buffer(),
-        std::bind(&espnow_uart_device::handle_serial_port_write, this,
-            asio::placeholders::error, asio::placeholders::bytes_transferred));
-}
-
-void espnow_uart_device::handle_serial_port_write(const asio::error_code& ec, size_t bytes_transferred) {
-    if(ec) {
-        std::cerr << "Error writing serial port: " << ec.message() << std::endl;
-        return;
-    }
-
-    if(!serial_port_write_buffers_.empty()) {
-        serial_port_write_buffers_.pop_front();
-        start_writing_serial_port();
-    }
-}
-
-void espnow_uart_device::serial_port_read_handle(const asio::error_code& ec, size_t bytes_transferred) {
+int32_t espnow_uart_device::serial_port_read_handle(const asio::error_code& ec, std::span<uint8_t> data) {
     if(ec) {
         std::cerr << "Error reading serial port: " << ec.message() << std::endl;
-        return;
+        return -1;
     }
 
-    serial_port_buffer_.commit(bytes_transferred);
-
-    auto data = serial_port_buffer_.get_data();
-    while(!data.empty()) {
-        auto processed_bytes = handle_serial_packet(data);
-        if(processed_bytes == -1) {
-            serial_port_buffer_.move_data_to_front();
-            break;
-        }
-
-        if(processed_bytes == 0) {
-            std::cerr << "Error handling serial packet" << std::endl;
-            break;
-        }
-
-        serial_port_buffer_.consume(processed_bytes);
-        data = serial_port_buffer_.get_data();
-    }
-
-    serial_port_buffer_.move_data_to_front();
-
-    start_reading_serial_port();
+    return handle_serial_packet(data);
 }
 
 int32_t espnow_uart_device::handle_serial_packet(std::span<uint8_t> data) {
@@ -198,11 +148,7 @@ int32_t espnow_uart_device::handle_serial_packet(std::span<uint8_t> data) {
                 if(!requested_start_) {
                     requested_start_ = true;
                     start_host message_to_send;
-                    packet_buffer buffer;
-                    memcpy(buffer.buffer.data(), &message_to_send, sizeof(message_to_send));
-                    buffer.size = sizeof(message_to_send);
-                    serial_port_write_buffers_.push_back(buffer);
-                    start_writing_serial_port();
+                    serial_port_->write(std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&message_to_send), sizeof(message_to_send)));
 
                     start_device message_got;
                     buffer_utils<start_device>::read(data, message_got);

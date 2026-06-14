@@ -13,6 +13,7 @@ add_executable(espnowdaemon
     device_manager.cpp
     control_session.cpp
     control_server.cpp
+    serial_port_socket.cpp
 )
 
 protobuf_generate(TARGET espnowdaemon

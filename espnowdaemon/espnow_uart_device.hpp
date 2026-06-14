@@ -10,6 +10,7 @@
 #include <utility/receiving_buffer.hpp>
 #include <chrono>
 #include "messages/start_device.hpp"
+#include "serial_port_socket.hpp"
 
 using uptime_t = std::chrono::seconds;
 
@@ -38,7 +39,7 @@ public:
 
     static std::expected<pointer, opening_device_error> open(asio::io_context& io_context, std::string_view device_file, uint32_t espnow_idx);
 
-    espnow_uart_device(asio::serial_port serial_port, std::string espnow_id, asio::posix::stream_descriptor tun_fd, std::string_view device_file);
+    espnow_uart_device(std::unique_ptr<serial_port_socket> serial_port, std::string espnow_id, asio::posix::stream_descriptor tun_fd, std::string_view device_file);
 
     std::string_view get_espnowid() const;
     std::string_view get_device_file() const;
@@ -58,10 +59,8 @@ private:
     device_details device_details_;
     std::string espnow_id_;
     std::string device_file_;
-    asio::serial_port serial_port_;
+    std::unique_ptr<serial_port_socket> serial_port_;
     asio::posix::stream_descriptor tun_fd_;
-    receiving_buffer<1024 * 4> serial_port_buffer_;
-    std::deque<packet_buffer> serial_port_write_buffers_;
     std::array<uint8_t, 512> tun_fd_buffer_;
     std::deque<packet_buffer> tun_fd_write_buffers_;
 
@@ -69,12 +68,9 @@ private:
     std::chrono::steady_clock::time_point boot_time_;
 
     void start_reading_tun();
-    void start_reading_serial_port();
     void tun_read_handle(const asio::error_code& ec, size_t bytes_transferred);
     void start_writing_tun();
     void handle_tun_write(const asio::error_code& ec, size_t bytes_transferred);
-    void start_writing_serial_port();
-    void handle_serial_port_write(const asio::error_code& ec, size_t bytes_transferred);
-    void serial_port_read_handle(const asio::error_code& ec, size_t bytes_transferred);
+    int32_t serial_port_read_handle(const asio::error_code& ec, std::span<uint8_t> data);
     int32_t handle_serial_packet(std::span<uint8_t> data);
 };
