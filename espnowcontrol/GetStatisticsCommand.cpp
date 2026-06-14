@@ -1,5 +1,6 @@
 #include "GetStatisticsCommand.hpp"
 #include <iostream>
+#include <print>
 #include <string>
 #include "control_messages.pb.h"
 
@@ -13,7 +14,7 @@ std::string_view GetStatisticsCommand::get_description() const {
 
 bool GetStatisticsCommand::handle(ConnectionSocket& socket, args_t args) {
     if (args.size() != 1) {
-        std::cerr << "Usage: get_statistics <device_name>" << std::endl;
+        std::println(std::cerr, "Usage: get_statistics <device_name>");
         return false;
     }
 
@@ -33,16 +34,16 @@ bool GetStatisticsCommand::handle(ConnectionSocket& socket, args_t args) {
     if (response_envelope.has_get_statistics_response()) {
         const auto& response = response_envelope.get_statistics_response();
         if(response.status() == control_messages::get_statistics_response::SUCCESS) {
-            std::cout << "Device statistics:" << std::endl;
-            std::cout << "  Broadcast sent: " << response.broadcast_sent() << std::endl;
-            std::cout << "  Broadcast received: " << response.broadcast_received() << std::endl;
+            std::println("Device statistics:");
+            std::println("  Broadcast sent: {}", response.broadcast_sent());
+            std::println("  Broadcast received: {}", response.broadcast_received());
         } else {
             switch(response.status()) {
                 case control_messages::get_statistics_response::DEVICE_NOT_FOUND:
-                    std::cerr << "Device not found" << std::endl;
+                    std::println(std::cerr, "Device not found");
                     break;
                 case control_messages::get_statistics_response::UNKNOWN_ERROR:
-                    std::cerr << "Unknown error" << std::endl;
+                    std::println(std::cerr, "Unknown error");
                     break;
             }
         }

@@ -1,5 +1,6 @@
 #include "AddUartDeviceCommand.hpp"
 #include <iostream>
+#include <print>
 #include <string>
 #include "control_messages.pb.h"
 
@@ -13,7 +14,7 @@ std::string_view AddUartDeviceCommand::get_description() const {
 
 bool AddUartDeviceCommand::handle(ConnectionSocket& socket, args_t args) {
     if (args.size() != 1) {
-        std::cerr << "Usage: add_uart_device <device_file>" << std::endl;
+        std::println(std::cerr, "Usage: add_uart_device <device_file>");
         return false;
     }
 
@@ -33,17 +34,17 @@ bool AddUartDeviceCommand::handle(ConnectionSocket& socket, args_t args) {
     if (response_envelope.has_add_uart_device_response()) {
         const auto& response = response_envelope.add_uart_device_response();
         if(response.status() == control_messages::add_uart_device_response::SUCCESS) {
-            std::cout << "Added device with ID: " << response.device_id() << std::endl;
+            std::println("Added device with ID: {}", response.device_id());
         } else {
             switch(response.status()) {
                 case control_messages::add_uart_device_response::DEVICE_FILE_DOES_NOT_EXIST:
-                    std::cerr << "Device file does not exist" << std::endl;
+                    std::println(std::cerr, "Device file does not exist");
                     break;
                 case control_messages::add_uart_device_response::DEVICE_ALREADY_EXISTS:
-                    std::cerr << "Device already exists" << std::endl;
+                    std::println(std::cerr, "Device already exists");
                     break;
                 case control_messages::add_uart_device_response::UNKNOWN_ERROR:
-                    std::cerr << "Unknown error" << std::endl;
+                    std::println(std::cerr, "Unknown error");
                     break;
             }
         }

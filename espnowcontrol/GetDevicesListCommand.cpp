@@ -1,6 +1,6 @@
 #include "GetDevicesListCommand.hpp"
 
-#include <iostream>
+#include <print>
 #include <string>
 #include "control_messages.pb.h"
 
@@ -30,21 +30,21 @@ bool GetDevicesListCommand::handle(ConnectionSocket& socket, args_t) {
     const auto& response = response_envelope.get_list_of_devices_response();
 
     for(const auto& device : response.devices()) {
-        std::cout << device.device_id() << ":" << std::endl;
-        std::cout << "\tdevice name: " << device.device_name() << std::endl;
-        std::cout << "\tespnow version: " << device.version() << std::endl;
-        std::cout << "\tmac address: ";
+        std::println("{}:", device.device_id());
+        std::println("\tdevice name: {}", device.device_name());
+        std::println("\tespnow version: {}", static_cast<int>(device.version()));
+        std::print("\tmac address: ");
         for(const auto& byte : device.mac_address()) {
-            std::cout << std::hex << static_cast<int>(static_cast<uint8_t>(byte)) << std::dec;
+            std::print("{:02x}", static_cast<uint8_t>(byte));
             if(&byte != &device.mac_address().back()) {
-                std::cout << ":";
+                std::print(":");
             }
         }
-        std::cout << std::endl;
-        std::cout << "\tfw version: " << device.fw_version().major() << "." << device.fw_version().minor() << "." << device.fw_version().patch() << std::endl;
+        std::println();
+        std::println("\tfw version: {}.{}.{}", device.fw_version().major(), device.fw_version().minor(), device.fw_version().patch());
         if(device.has_uart_info()) {
-            std::cout << "\tconnection type: UART" << std::endl;
-            std::cout << "\tdevice file: " << device.uart_info().device_file() << std::endl;
+            std::println("\tconnection type: UART");
+            std::println("\tdevice file: {}", device.uart_info().device_file());
         }
     }
 

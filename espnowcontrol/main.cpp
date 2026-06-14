@@ -1,4 +1,5 @@
 #include <iostream>
+#include <print>
 #include <string>
 #include <string_view>
 #include <asio.hpp>
@@ -31,10 +32,10 @@ int main(int argc, char *argv[]) {
 
     auto command = find_command(args_view[0], commands);
     if(command == commands.end()){
-        std::cerr << "Command not found" << std::endl;
-        std::cerr << "Available commands:" << std::endl;
+        std::println(std::cerr, "Command not found");
+        std::println(std::cerr, "Available commands:");
         for(const auto& command : commands){
-            std::cerr << '\t' << command->get_description() << std::endl;
+            std::println(std::cerr, "\t{}", command->get_description());
         }
         return -1;
     }
@@ -45,12 +46,12 @@ int main(int argc, char *argv[]) {
 
         auto result = command->get()->handle(socket, args_view.subspan(1));
         if(!result) {
-            std::cerr << "Failed to handle command" << std::endl;
+            std::println(std::cerr, "Failed to handle command");
             return -1;
         }
     }
     catch (std::exception &e) {
-        std::cerr << "Exception: " << e.what() << std::endl;
+        std::println(std::cerr, "Exception: {}", e.what());
     }
     return 0;
 }
