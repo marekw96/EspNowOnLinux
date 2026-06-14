@@ -43,8 +43,6 @@ int main(int argc, char *argv[]) {
         asio::io_context io_context;
         ConnectionSocket socket(io_context);
 
-        std::cout << "Connected to " << CONTROL_IP << ":" << CONTROL_PORT << std::endl;
-
         auto result = command->get()->handle(socket, args_view.subspan(1));
         if(!result) {
             std::cerr << "Failed to handle command" << std::endl;
