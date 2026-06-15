@@ -11,6 +11,7 @@
 #include <chrono>
 #include "messages/start_device.hpp"
 #include "serial_port_socket.hpp"
+#include "utility/event_dispatcher.hpp"
 
 using uptime_t = std::chrono::seconds;
 
@@ -37,9 +38,16 @@ public:
         unknown_error
     };
 
-    static std::expected<pointer, opening_device_error> open(asio::io_context& io_context, std::string_view device_file, uint32_t espnow_idx);
+    static std::expected<pointer, opening_device_error> open(asio::io_context& io_context,
+                                                             std::string_view device_file,
+                                                             uint32_t espnow_idx,
+                                                             event_dispatcher& dispatcher);
 
-    espnow_uart_device(std::unique_ptr<serial_port_socket> serial_port, std::string espnow_id, asio::posix::stream_descriptor tun_fd, std::string_view device_file);
+    espnow_uart_device(std::unique_ptr<serial_port_socket> serial_port,
+                        std::string espnow_id,
+                        asio::posix::stream_descriptor tun_fd,
+                        std::string_view device_file,
+                        event_dispatcher& dispatcher);
 
     std::string_view get_espnowid() const;
     std::string_view get_device_file() const;
@@ -66,6 +74,7 @@ private:
 
     statistics statistics_;
     std::chrono::steady_clock::time_point boot_time_;
+    event_dispatcher& dispatcher_;
 
     void start_reading_tun();
     void tun_read_handle(const asio::error_code& ec, size_t bytes_transferred);

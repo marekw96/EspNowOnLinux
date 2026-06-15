@@ -14,6 +14,7 @@ add_executable(espnowdaemon
     control_session.cpp
     control_server.cpp
     serial_port_socket.cpp
+    ../utility/event_dispatcher.cpp
 )
 
 protobuf_generate(TARGET espnowdaemon

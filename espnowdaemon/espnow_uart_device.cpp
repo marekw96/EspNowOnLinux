@@ -18,6 +18,8 @@
 #include "messages/packet_to_send.hpp"
 #include "messages/ping.hpp"
 
+#include "events/new_device_event.hpp"
+
 namespace {
     int open_tun_device(std::string_view interface_name) {
         auto m_fd = ::open("/dev/net/tun", O_RDWR);
@@ -45,7 +47,7 @@ namespace {
     }
 }
 
-std::expected<espnow_uart_device::pointer, espnow_uart_device::opening_device_error> espnow_uart_device::open(asio::io_context& io_context, std::string_view device_file, uint32_t espnow_idx) {
+std::expected<espnow_uart_device::pointer, espnow_uart_device::opening_device_error> espnow_uart_device::open(asio::io_context& io_context, std::string_view device_file, uint32_t espnow_idx, event_dispatcher& dispatcher) {
     std::unique_ptr<serial_port_socket> serial_port;
     try{
         serial_port = std::make_unique<serial_port_socket>(io_context, device_file);
@@ -66,11 +68,11 @@ std::expected<espnow_uart_device::pointer, espnow_uart_device::opening_device_er
     auto tun_fd = open_tun_device(espnow_id);
     asio::posix::stream_descriptor tun_fd_descriptor(io_context, tun_fd);
 
-    return std::make_shared<espnow_uart_device>(std::move(serial_port), espnow_id, std::move(tun_fd_descriptor), device_file);
+    return std::make_shared<espnow_uart_device>(std::move(serial_port), espnow_id, std::move(tun_fd_descriptor), device_file, dispatcher);
 }
 
-espnow_uart_device::espnow_uart_device(std::unique_ptr<serial_port_socket> serial_port, std::string espnow_id, asio::posix::stream_descriptor tun_fd, std::string_view device_file)
-    : serial_port_(std::move(serial_port)), espnow_id_(std::move(espnow_id)), tun_fd_(std::move(tun_fd)), device_file_(device_file) {
+espnow_uart_device::espnow_uart_device(std::unique_ptr<serial_port_socket> serial_port, std::string espnow_id, asio::posix::stream_descriptor tun_fd, std::string_view device_file, event_dispatcher& dispatcher)
+    : serial_port_(std::move(serial_port)), espnow_id_(std::move(espnow_id)), tun_fd_(std::move(tun_fd)), device_file_(device_file), dispatcher_(dispatcher) {
         serial_port_->set_read_handler(std::bind(&espnow_uart_device::serial_port_read_handle, this,
             asio::placeholders::error, asio::placeholders::bytes_transferred));
         serial_port_->start_reading();
@@ -157,6 +159,8 @@ int32_t espnow_uart_device::handle_serial_packet(std::span<uint8_t> data) {
                     device_details_.firmware_version = message_got.fw_version;
                     memcpy(device_details_.mac_address, message_got.mac_address, 6);
                     std::cout << espnow_id_ << ": Device name: " << device_details_.device_name << " MAC: " << (device_details_.mac_address) << std::endl;
+
+                    dispatcher_.publish<new_device_event>(this);
                 }
             }
             return start_device::SIZE;

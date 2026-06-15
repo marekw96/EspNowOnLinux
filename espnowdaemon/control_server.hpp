@@ -4,9 +4,11 @@
 #include "device_manager.hpp"
 #include <asio.hpp>
 
+class event_dispatcher;
+
 class control_server {
 public:
-    control_server(asio::io_context &io_context, device_manager& device_manager);
+    control_server(asio::io_context &io_context, device_manager& device_manager, event_dispatcher& dispatcher);
 
     void start();
 
@@ -16,4 +18,5 @@ private:
     asio::io_context &io_context_;
     asio::ip::tcp::acceptor acceptor_;
     device_manager& device_manager_;
+    event_dispatcher& dispatcher_;
 };
