@@ -19,5 +19,9 @@ FetchContent_MakeAvailable(googletest)
 add_executable(test_receiving_buffer test_receiving_buffer.cpp)
 target_link_libraries(test_receiving_buffer GTest::gtest_main GTest::gtest utility)
 
+add_executable(test_event_dispatcher test_event_dispatcher.cpp)
+target_link_libraries(test_event_dispatcher GTest::gtest_main GTest::gtest utility)
+
 include(GoogleTest)
 gtest_discover_tests(test_receiving_buffer)
+gtest_discover_tests(test_event_dispatcher)
